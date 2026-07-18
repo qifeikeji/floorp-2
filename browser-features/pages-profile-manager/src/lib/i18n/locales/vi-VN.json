@@ -1,0 +1,24 @@
+{
+    "profileManager": {
+        "title": "Hồ sơ",
+        "buttons": {
+            "refresh": "Làm mới danh sách",
+            "create": "Tạo"
+        },
+        "loading": "Đang tải…",
+        "noProfiles": "Không tìm thấy hồ sơ.",
+        "current": "Hiện tại",
+        "default": "Mặc định",
+        "actions": {
+            "open": "Mở",
+            "new": "Mới",
+            "rename": "Đổi tên",
+            "remove": "Xóa",
+            "setDefault": "Mặc định"
+        },
+        "prompts": {
+            "confirmRemove": "Bạn chắc chắn là muốn xóa hồ sơ này?",
+            "newName": "Tên hồ sơ mới:"
+        }
+    }
+}

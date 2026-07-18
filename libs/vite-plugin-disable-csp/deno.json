@@ -1,0 +1,7 @@
+{
+  "name": "vite-plugin-disable-csp",
+  "imports": {
+    "rolldown": "npm:rolldown@^1.0.0-beta.57"
+  },
+  "exports": "./plugin.ts"
+}

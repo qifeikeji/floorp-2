@@ -1,0 +1,54 @@
+{
+    "title": "Floorp Start",
+    "topSites": {
+        "addSite": "Añadir sitio",
+        "addNewSite": "Añadir nuevo sitio",
+        "url": "URL",
+        "label": "Etiqueta",
+        "cancel": "Cancelar",
+        "add": "Añadir",
+        "close": "Cerrar",
+        "labelPlaceholder": "Nombre de sitio web",
+        "pin": "Pin",
+        "unpin": "Desfijar",
+        "block": "Bloquear",
+        "blockTitle": "¿Bloquear \"{{title}}\"?",
+        "blockConfirm": "Este sitio se eliminará de sus sitios principales y no se volverá a sugerir. Puede administrar los sitios bloqueados en la configuración.",
+        "invalidUrl": "URL invalida"
+    },
+    "settings": {
+        "newTabSettings": "Configuración de pestaña nueva",
+        "displayComponents": "Componentes de pantalla",
+        "topSites": "Sitios principales",
+        "clock": "Reloj",
+        "searchBar": "Barra de búsqueda",
+        "backgroundSettings": "Configuración de fondo",
+        "noBackground": "Sin fondo",
+        "randomImage": "Imagen al azar",
+        "customImage": "Imagen personalizada",
+        "folderImages": "Imágenes desde la carpeta",
+        "floorpImages": "Imágenes de Floorp",
+        "currentImage": "Current image:",
+        "imageRecommendation": "Recommended: 1920x1080 or higher",
+        "currentFolder": "Current folder:",
+        "selectFolder": "Seleccionar una carpeta",
+        "selected": "Seleccionado",
+        "enableSlideshow": "Activar presentación",
+        "slideshowInterval": "Slideshow Interval",
+        "floorpStart": "Floorp Start",
+        "disableFloorpStart": "Desactivar Floorp Start (usar about:newtab clásico)",
+        "disableFloorpStartDescription": "Cuando se activa, Floorp Start será reemplazado por la clásica pestaña nueva / página de inicio de Firefox.",
+        "restartRequired": "Es necesario reiniciar el navegador para que surta efecto.",
+        "firefoxLayout": "Usar diseño heredado (como Firefox Home)"
+    },
+    "searchBar": {
+        "searchOrEnterUrl": "Buscar o introducir URL",
+        "loadingSearchEngines": "Cargando motores de búsqueda..."
+    },
+    "settingsButton": {
+        "settings": "Configuración"
+    },
+    "modal": {
+        "close": "Cerrar"
+    }
+}

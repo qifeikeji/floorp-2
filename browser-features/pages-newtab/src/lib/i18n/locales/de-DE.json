@@ -1,0 +1,54 @@
+{
+    "title": "Floorp-Start",
+    "topSites": {
+        "addSite": "Seite hinzufügen",
+        "addNewSite": "Neue Seite hinzufügen",
+        "url": "URL",
+        "label": "Titel",
+        "cancel": "Abbrechen",
+        "add": "Neu",
+        "close": "Schließen",
+        "labelPlaceholder": "Webseitenname",
+        "pin": "Anheften",
+        "unpin": "Lösen",
+        "block": "Blockieren",
+        "blockTitle": "\"{{title}}\" blockieren?",
+        "blockConfirm": "Diese Webseite wird von deinen Verknüpfungen entfernt und nicht mehr vorgeschlagen. Du kannst blockierte Webseiten in den Einstellungen verwalten.",
+        "invalidUrl": "Ungültige URL"
+    },
+    "settings": {
+        "newTabSettings": "Neuer-Tab-Einstellungen",
+        "displayComponents": "Komponenten anzeigen",
+        "topSites": "Verknüpfungen",
+        "clock": "Uhr",
+        "searchBar": "Suchleiste",
+        "backgroundSettings": "Hintergrund-Einstellungen",
+        "noBackground": "Ohne Hintergrund",
+        "randomImage": "Zufälliges Bild",
+        "customImage": "Benutzerdefiniertes Bild",
+        "folderImages": "Bilder aus einem Ordner",
+        "floorpImages": "Floorp-Bilder",
+        "currentImage": "Aktuelles Bild:",
+        "imageRecommendation": "Empfohlen: 1920x1080 oder höher",
+        "currentFolder": "Aktueller Ordner:",
+        "selectFolder": "Ordner auswählen",
+        "selected": "Ausgewählt",
+        "enableSlideshow": "Diashow aktivieren",
+        "slideshowInterval": "Intervall (Sekunden)",
+        "floorpStart": "Floorp-Start",
+        "disableFloorpStart": "Floorp-Start deaktivieren (klassisches about:newtab verwenden)",
+        "disableFloorpStartDescription": "Wenn aktiviert, wird Floorp-Start durch den klassischen neuen Firefox-Tab ersetzt.",
+        "restartRequired": "Erfordert einen Neustart des Browsers, um vollständig wirksam zu werden.",
+        "firefoxLayout": "Legacy-Layout verwenden (wie Firefox Home)"
+    },
+    "searchBar": {
+        "searchOrEnterUrl": "Suchen oder URL eingeben",
+        "loadingSearchEngines": "Suchmaschinen werden geladen…"
+    },
+    "settingsButton": {
+        "settings": "Einstellungen"
+    },
+    "modal": {
+        "close": "Schließen"
+    }
+}

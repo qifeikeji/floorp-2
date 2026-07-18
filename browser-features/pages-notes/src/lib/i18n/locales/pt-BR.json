@@ -1,0 +1,69 @@
+{
+    "title": {
+        "default": "Notas do {{productName}}"
+    },
+    "notes": {
+        "welcome": "Bem-vindo às {{productName}} Notas!",
+        "welcomeContent": "Bem-vindo ao {{productName}} Notes! Veja como usá-lo.\n\n{{productName}} O Notes é um recurso de anotações que pode ser sincronizado entre dispositivos. Para ativar a sincronização, é necessário fazer login em {{productName}} com uma conta Mozilla.\n{{productName}} As anotações são armazenadas em {{productName}} e sincronizadas entre dispositivos usando o Firefox Sync. O Firefox Sync criptografa o conteúdo da sincronização com a senha da sua conta Mozilla, de modo que ninguém pode saber o seu conteúdo.",
+        "new": "Nova anotação",
+        "reorder": "Reordenar",
+        "done": "Concluído",
+        "emptyTitle": "Sem título",
+        "emptyContent": "Sem conteúdo",
+        "noNotesSelected": "Selecione uma nota ou crie uma nova",
+        "createNew": "Criar nova nota",
+        "titlePlaceholder": "Título",
+        "loading": "Carregando anotações...",
+        "delete": "Excluir",
+        "empty": "Ainda não há notas. Clique em \"Nova nota\" para criar uma.",
+        "deleteConfirmTitle": "Excluir nota",
+        "deleteConfirmMessage": "Tem certeza de que deseja excluir esta nota? Essa ação não pode ser desfeita.",
+        "deleteConfirm": "Excluir",
+        "deleteCancel": "Cancelar",
+        "noteList": "Lista de notas",
+        "search": "Pesquisar notas",
+        "clearSearch": "Limpar busca",
+        "noSearchResults": "Nenhuma nota corresponde à sua pesquisa"
+    },
+    "editor": {
+        "bold": "Negrito",
+        "italic": "Itálico",
+        "underline": "Sublinhado",
+        "strikethrough": "Riscado",
+        "bulletList": "Lista de itens",
+        "numberedList": "Lista numerada",
+        "alignLeft": "Alinhar à esquerda",
+        "alignCenter": "Alinhar ao centro",
+        "alignRight": "Alinhar à direita",
+        "quote": "Citação",
+        "heading1": "Cabeçalho 1",
+        "heading2": "Cabeçalho 2",
+        "heading3": "Cabeçalho 3",
+        "undo": "Desfazer",
+        "redo": "Refazer",
+        "history": "Histórico",
+        "toolbar": "Barra de ferramentas de formatação",
+        "headings": "Cabeçalhos",
+        "textFormatting": "Formatação de texto",
+        "lists": "Listas",
+        "alignment": "Alinhamento",
+        "contentArea": "Conteúdo da nota",
+        "placeholder": "Comece a escrever...",
+        "image": "Inserir imagem"
+    },
+    "common": {
+        "close": "Fechar",
+        "confirm": "Confirmar",
+        "cancel": "Cancelar"
+    },
+    "save": {
+        "saving": "Salvando...",
+        "saved": "Salvo",
+        "error": "Erro ao salvar"
+    },
+    "error": {
+        "loadFailed": "Falha ao carregar os dados da nota",
+        "saveFailed": "Falha ao salvar os dados da nota",
+        "indexOutOfRange": "O índice {{index}} está fora do alcance"
+    }
+}

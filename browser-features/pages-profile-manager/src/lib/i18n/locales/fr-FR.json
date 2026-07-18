@@ -1,0 +1,24 @@
+{
+    "profileManager": {
+        "title": "Profils",
+        "buttons": {
+            "refresh": "Refresh",
+            "create": "Créer"
+        },
+        "loading": "Chargement…",
+        "noProfiles": "Aucun profil trouvé.",
+        "current": "Actuel",
+        "default": "Par défaut",
+        "actions": {
+            "open": "Open",
+            "new": "Nouveau",
+            "rename": "Renommer",
+            "remove": "Supprimer",
+            "setDefault": "Par défaut"
+        },
+        "prompts": {
+            "confirmRemove": "Êtes-vous sûr de vouloir supprimer ce profil ?",
+            "newName": "Nouveau nom de profil :"
+        }
+    }
+}

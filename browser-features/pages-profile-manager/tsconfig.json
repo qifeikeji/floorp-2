@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "allowImportingTsExtensions": true,
+    "lib": [
+      "DOM",
+      "dom.iterable",
+      "esnext"
+    ],
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@nora/ui-components": [
+        "../../libs/shared/ui-components/src/index.ts"
+      ]
+    },
+    "types": [
+      "vite/client"
+    ],
+    "jsx": "react-jsx"
+  }
+}

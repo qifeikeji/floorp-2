@@ -1,0 +1,69 @@
+{
+    "title": {
+        "default": "{{productName}} Notities"
+    },
+    "notes": {
+        "welcome": "Welkom bij {{productName}} Notities!",
+        "welcomeContent": "Welkom bij {{productName}} Notities! Zo gebruik je het.\n\n{{productName}} Notities is een functie voor het maken van notities die kunnen worden gesynchroniseerd tussen apparaten. Om synchronisatie aan te zetten, moet u zich aanmelden bij {{productName}} met een Mozilla-account.\n{{productName}} Notities worden opgeslagen in {{productName}} en gesynchroniseerd met behulp van Firefox Sync. Firefox Sync versleutelt de inhoud van de synchronisatie met uw Mozilla account wachtwoord, zodat niemand de inhoud kan zien.",
+        "new": "Nieuwe notitie",
+        "reorder": "Herordenen",
+        "done": "Klaar",
+        "emptyTitle": "Naamloos",
+        "emptyContent": "Geen inhoud",
+        "noNotesSelected": "Selecteer een notitie of maak er één aan",
+        "createNew": "Nieuwe notitie maken",
+        "titlePlaceholder": "Titel",
+        "loading": "Notities laden...",
+        "delete": "Verwijderen",
+        "empty": "No notes yet. Click \"New Note\" to create one.",
+        "deleteConfirmTitle": "Delete Note",
+        "deleteConfirmMessage": "Are you sure you want to delete this note? This action cannot be undone.",
+        "deleteConfirm": "Verwijderen",
+        "deleteCancel": "Annuleren",
+        "noteList": "Notes list",
+        "search": "Search notes",
+        "clearSearch": "Clear search",
+        "noSearchResults": "No notes match your search"
+    },
+    "editor": {
+        "bold": "Dikgedrukt",
+        "italic": "Schuingedrukt",
+        "underline": "Onderstreept",
+        "strikethrough": "Doorgestreept",
+        "bulletList": "Opsommingslijst",
+        "numberedList": "Genummerde lijst",
+        "alignLeft": "Links uitlijnen",
+        "alignCenter": "Centreren",
+        "alignRight": "Rechts uitlijnen",
+        "quote": "Citeren",
+        "heading1": "Koptekst 1",
+        "heading2": "Koptekst 2",
+        "heading3": "Koptekst 3",
+        "undo": "Undo",
+        "redo": "Redo",
+        "history": "History",
+        "toolbar": "Formatting toolbar",
+        "headings": "Headings",
+        "textFormatting": "Text formatting",
+        "lists": "Lists",
+        "alignment": "Alignment",
+        "contentArea": "Note content",
+        "placeholder": "Start writing...",
+        "image": "Insert image"
+    },
+    "common": {
+        "close": "Sluiten",
+        "confirm": "Confirm",
+        "cancel": "Annuleren"
+    },
+    "save": {
+        "saving": "Saving...",
+        "saved": "Saved",
+        "error": "Save failed"
+    },
+    "error": {
+        "loadFailed": "Notitiegegevens laden mislukt",
+        "saveFailed": "Notitiegegevens opslaan mislukt",
+        "indexOutOfRange": "Index {{index}} valt buiten het bereik"
+    }
+}

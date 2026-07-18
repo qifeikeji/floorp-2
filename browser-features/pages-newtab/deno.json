@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "types": [
+      "vite/client"
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "jsxImportSourceTypes": "@types/react",
+    "lib": [
+      "dom",
+      "dom.asynciterable",
+      "deno.ns"
+    ]
+  },
+  "imports": {
+    "@/": "./src/",
+    "@nora/ui-components": "../../libs/shared/ui-components/src/index.ts"
+  }
+}

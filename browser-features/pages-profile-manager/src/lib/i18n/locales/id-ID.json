@@ -1,0 +1,24 @@
+{
+    "profileManager": {
+        "title": "Profil",
+        "buttons": {
+            "refresh": "Refresh",
+            "create": "Buat"
+        },
+        "loading": "Memuat …",
+        "noProfiles": "Tidak ada profil ditemukan.",
+        "current": "Saat ini",
+        "default": "Bawaan",
+        "actions": {
+            "open": "Open",
+            "new": "Baru",
+            "rename": "Ganti nama",
+            "remove": "Hapus",
+            "setDefault": "Bawaan"
+        },
+        "prompts": {
+            "confirmRemove": "Yakin ingin menghapus profil ini?",
+            "newName": "Nama profil baru:"
+        }
+    }
+}

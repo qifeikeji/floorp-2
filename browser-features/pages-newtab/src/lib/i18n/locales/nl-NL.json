@@ -1,0 +1,54 @@
+{
+    "title": "Floorp Start",
+    "topSites": {
+        "addSite": "Site toevoegen",
+        "addNewSite": "Nieuwe site toevoegen",
+        "url": "URL",
+        "label": "Label",
+        "cancel": "Annuleren",
+        "add": "Toevoegen",
+        "close": "Sluiten",
+        "labelPlaceholder": "Websitenaam",
+        "pin": "Vastzetten",
+        "unpin": "Losmaken",
+        "block": "Blokkeren",
+        "blockTitle": "Blokkeer \"{{title}}\"?",
+        "blockConfirm": "Deze site zal verwijderd worden van uw topsites en zal niet opnieuw worden voorgesteld. U kunt geblokkeerde sites beheren in instellingen.",
+        "invalidUrl": "Ongeldige URL"
+    },
+    "settings": {
+        "newTabSettings": "Instellingen voor nieuw tabblad",
+        "displayComponents": "Zichtbare onderdelen",
+        "topSites": "Topsites",
+        "clock": "Klok",
+        "searchBar": "Zoekbalk",
+        "backgroundSettings": "Achtergrondinstellingen",
+        "noBackground": "Geen achtergrond",
+        "randomImage": "Willekeurige afbeelding",
+        "customImage": "Eigen afbeelding",
+        "folderImages": "Afbeeldingen uit een map",
+        "floorpImages": "Floorp Afbeeldingen",
+        "currentImage": "Huidige afbeelding:",
+        "imageRecommendation": "Advies: gebruik afbeeldingen met een resolutie van 1920x1080 of hoger.",
+        "currentFolder": "Huidige map:",
+        "selectFolder": "Selecteer map",
+        "selected": "Geselecteerd",
+        "enableSlideshow": "Diavoorstelling inschakelen",
+        "slideshowInterval": "Interval (seconden)",
+        "floorpStart": "Floorp Start",
+        "disableFloorpStart": "Floorp Start uitschakelen (gebruik klassieke about:newtab)",
+        "disableFloorpStartDescription": "Indien ingeschakeld, zal Floorp Start worden vervangen door het klassieke nieuwe tabblad/startpagina van Firefox.",
+        "restartRequired": "Vereist een herstart van de browser om volledig van kracht te worden.",
+        "firefoxLayout": "Legacy lay-out gebruiken (zoals Firefox Home)"
+    },
+    "searchBar": {
+        "searchOrEnterUrl": "Zoek of voer URL in",
+        "loadingSearchEngines": "Zoekmachines laden..."
+    },
+    "settingsButton": {
+        "settings": "Instellingen"
+    },
+    "modal": {
+        "close": "Sluiten"
+    }
+}

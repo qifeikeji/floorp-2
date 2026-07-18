@@ -1,0 +1,108 @@
+import * as t from "io-ts";
+
+/**
+ * ワークスペースの詳細情報
+ */
+export interface WorkspaceDetail {
+  name: string;
+  tabs: unknown[];
+  defaultWorkspace: boolean;
+  id: string;
+  icon: string | null;
+  userContextId?: number;
+  isPrivateContainerWorkspace?: boolean;
+}
+
+/**
+ * 選択中ワークスペース情報
+ */
+export interface WorkspacePreference {
+  selectedWorkspaceId?: string;
+  defaultWorkspace?: string;
+}
+
+/**
+ * ウィンドウ内のワークスペースレコード
+ */
+export type WindowWorkspaces = Record<
+  string,
+  WorkspaceDetail | WorkspacePreference
+>;
+
+/**
+ * PF11以前のワークスペース全体構造
+ */
+export interface Floorp11Workspaces {
+  windows: Record<string, WindowWorkspaces>;
+}
+
+// io-ts コーデック定義
+export const zWorkspaceDetail = t.intersection([
+  t.type({
+    name: t.string,
+    tabs: t.array(t.unknown),
+    defaultWorkspace: t.boolean,
+    id: t.string,
+    icon: t.union([t.string, t.null]),
+  }),
+  t.partial({
+    userContextId: t.number,
+    isPrivateContainerWorkspace: t.boolean,
+  }),
+]);
+
+export const zWorkspacePreference = t.partial({
+  selectedWorkspaceId: t.string,
+  defaultWorkspace: t.string,
+});
+
+// export const zWindowWorkspaces = t.record(
+//   t.string,
+//   t.union([zWorkspaceDetail, zWorkspacePreference]),
+// );
+
+const recordFromString = <C extends t.Mixed>(
+  codomain: C,
+  name = `Record<string, ${codomain.name}>`,
+) =>
+  new t.Type<Record<string, t.TypeOf<C>>, Record<string, t.OutputOf<C>>, unknown>(
+    name,
+    (u): u is Record<string, t.TypeOf<C>> =>
+      t.UnknownRecord.is(u) && Object.keys(u).every(k => codomain.is(u[k])),
+    (u, c) => {
+      if (!t.UnknownRecord.is(u)) {
+        return t.failure(u, c, 'Invalid record');
+      }
+      const errors: t.Errors = [];
+      const a: Record<string, t.TypeOf<C>> = {};
+      for (const k in u) {
+        const r = codomain.validate(u[k], [
+          ...c,
+          { key: k, type: codomain, actual: u[k] },
+        ]);
+        if (r._tag === 'Left') {
+          errors.push(...r.left);
+        } else {
+          a[k] = r.right;
+        }
+      }
+
+      return errors.length > 0 ? t.failures(errors) : t.success(a);
+    },
+    a => {
+      const s: Record<string, t.OutputOf<C>> = {};
+      for (const k in a) {
+        s[k] = codomain.encode(a[k]);
+      }
+      return s;
+    },
+  );
+
+export const zWindowWorkspaces = recordFromString(
+  t.union([zWorkspaceDetail, zWorkspacePreference]),
+  'WindowWorkspaces',
+);
+
+export const zFloorp11WorkspacesSchema = t.type({
+  windows: t.record(t.string, zWindowWorkspaces),
+});

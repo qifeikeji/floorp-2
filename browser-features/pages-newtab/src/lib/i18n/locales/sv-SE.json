@@ -1,0 +1,54 @@
+{
+    "title": "Floorp Start",
+    "topSites": {
+        "addSite": "Lägg till webbplats",
+        "addNewSite": "Lägg till ny webbplats",
+        "url": "URL",
+        "label": "Etikett",
+        "cancel": "Avbryt",
+        "add": "Lägg till",
+        "close": "Stäng",
+        "labelPlaceholder": "Webbplatsnamn",
+        "pin": "Fäst",
+        "unpin": "Lossa",
+        "block": "Blockera",
+        "blockTitle": "Blockera \"{{title}}\"?",
+        "blockConfirm": "Den här webbplatsen tas bort från dina toppwebbplatser och kommer inte att föreslås igen. Du kan hantera blockerade webbplatser i inställningar.",
+        "invalidUrl": "Ogiltig URL"
+    },
+    "settings": {
+        "newTabSettings": "Ny flikinställningar",
+        "displayComponents": "Visnings komponenter",
+        "topSites": "Toppsajter",
+        "clock": "Klocka",
+        "searchBar": "Sökfält",
+        "backgroundSettings": "Bakgrundsinställningar",
+        "noBackground": "Ingen bakgrund",
+        "randomImage": "Slumpmässig bild",
+        "customImage": "Anpassad bild",
+        "folderImages": "Bilder från mapp",
+        "floorpImages": "Floorp bilder",
+        "currentImage": "Nuvarande bild:",
+        "imageRecommendation": "Rekommenderas: 1920x1080 eller högre",
+        "currentFolder": "Nuvarande mapp:",
+        "selectFolder": "Välj mapp",
+        "selected": "Vald",
+        "enableSlideshow": "Aktivera bildspel",
+        "slideshowInterval": "Slideshow Interval",
+        "floorpStart": "Floorp Start",
+        "disableFloorpStart": "Inaktivera Floorp Start (använd klassisk about:newtab)",
+        "disableFloorpStartDescription": "När aktiverad, Floorp Start kommer att ersättas av den klassiska Firefox ny fliken / startsidan.",
+        "restartRequired": "Kräver omstart av webbläsaren för att få full effekt.",
+        "firefoxLayout": "Använd äldre layout (som Firefox Home)"
+    },
+    "searchBar": {
+        "searchOrEnterUrl": "Sök eller ange URL",
+        "loadingSearchEngines": "Laddar sökmotorer..."
+    },
+    "settingsButton": {
+        "settings": "Inställningar"
+    },
+    "modal": {
+        "close": "Stäng"
+    }
+}

@@ -1,0 +1,54 @@
+{
+    "title": "Έναρξη Floorp",
+    "topSites": {
+        "addSite": "Προσθήκη ιστότοπου",
+        "addNewSite": "Προσθήκη νέου ιστότοπου",
+        "url": "URL",
+        "label": "Ετικέτα",
+        "cancel": "Ακύρωση",
+        "add": "Προσθήκη",
+        "close": "Κλείσιμο",
+        "labelPlaceholder": "Όνομα ιστότοπου",
+        "pin": "Καρφίτσωμα",
+        "unpin": "Ξεκαρφίτσωμα",
+        "block": "Αποκλεισμός",
+        "blockTitle": "Αποκλεισμός \"{{title}}\";",
+        "blockConfirm": "Αυτός ο ιστότοπος θα αφαιρεθεί από τις κορυφαίες τοποθεσίες σας και δεν θα σας προταθεί ξανά. Μπορείτε να διαχειριστείτε τις αποκλεισμένες τοποθεσίες στις ρυθμίσεις.",
+        "invalidUrl": "Μη έγκυρο URL"
+    },
+    "settings": {
+        "newTabSettings": "Ρυθμίσεις νέας καρτέλας",
+        "displayComponents": "Στοιχεία οθόνης",
+        "topSites": "Κορυφαίοι ιστότοποι",
+        "clock": "Ρολόι",
+        "searchBar": "Γραμμή αναζήτησης",
+        "backgroundSettings": "Ρυθμίσεις φόντου",
+        "noBackground": "Χωρίς φόντο",
+        "randomImage": "Τυχαία εικόνα",
+        "customImage": "Προσαρμοσμένη εικόνα",
+        "folderImages": "Εικόνες από φάκελο",
+        "floorpImages": "Εικόνες Floorp",
+        "currentImage": "Current image:",
+        "imageRecommendation": "Recommended: 1920x1080 or higher",
+        "currentFolder": "Current folder:",
+        "selectFolder": "Επιλογή φακέλου",
+        "selected": "Επιλέχθηκε",
+        "enableSlideshow": "Ενεργοποίηση παρουσίασης",
+        "slideshowInterval": "Slideshow Interval",
+        "floorpStart": "Έναρξη Floorp",
+        "disableFloorpStart": "Απενεργοποίηση της εκκίνησης Floorp (χρήση κλασικού about:newtab)",
+        "disableFloorpStartDescription": "Όταν είναι ενεργοποιημένη, η εκκίνηση Floorp θα αντικατασταθεί από την κλασική νέα καρτέλα / αρχική σελίδα του Firefox.",
+        "restartRequired": "Απαιτείται επανεκκίνηση του προγράμματος περιήγησης για να τεθεί σε πλήρη ισχύ.",
+        "firefoxLayout": "Χρήση παλαιάς διάταξης (όπως η αρχική σελίδα του Firefox)"
+    },
+    "searchBar": {
+        "searchOrEnterUrl": "Αναζήτηση ή εισαγωγή URL",
+        "loadingSearchEngines": "Φόρτωση μηχανών αναζήτησης..."
+    },
+    "settingsButton": {
+        "settings": "Ρυθμίσεις"
+    },
+    "modal": {
+        "close": "Κλείσιμο"
+    }
+}

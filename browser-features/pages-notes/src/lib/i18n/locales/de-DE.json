@@ -1,0 +1,69 @@
+{
+    "title": {
+        "default": "{{productName}} Notes"
+    },
+    "notes": {
+        "welcome": "Willkommen bei {{productName}} Notes!",
+        "welcomeContent": "Willkommen bei {{productName}} Notes! So funktioniert es.\n\n{{productName}} Notes ist eine Notizfunktion, die geräteübergreifend synchronisiert werden kann. Um die Synchronisierung zu aktivieren, melde dich mit einem Mozilla-Konto bei {{productName}} an.\n{{productName}} Notes werden in {{productName}} gespeichert und über Firefox Sync geräteübergreifend synchronisiert. Firefox Sync verschlüsselt die synchronisierten Inhalte mit dem Passwort deines Mozilla-Kontos, sodass niemand auf die Inhalte zugreifen kann.",
+        "new": "Neue Notiz",
+        "reorder": "Neu anordnen",
+        "done": "Fertig",
+        "emptyTitle": "Ohne Titel",
+        "emptyContent": "Kein Inhalt",
+        "noNotesSelected": "Wähle eine Notiz aus oder erstelle eine neue",
+        "createNew": "Neue Notiz erstellen",
+        "titlePlaceholder": "Titel",
+        "loading": "Notizen werden geladen…",
+        "delete": "Löschen",
+        "empty": "Noch keine Notizen. Klicke auf \"Neue Notiz\", um eine zu erstellen.",
+        "deleteConfirmTitle": "Notiz löschen",
+        "deleteConfirmMessage": "Möchtest du diese Notiz wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "deleteConfirm": "Löschen",
+        "deleteCancel": "Abbrechen",
+        "noteList": "Notizenliste",
+        "search": "Notizen durchsuchen",
+        "clearSearch": "Suche leeren",
+        "noSearchResults": "Keine Notizen gefunden"
+    },
+    "editor": {
+        "bold": "Fett",
+        "italic": "Kursiv",
+        "underline": "Unterstrichen",
+        "strikethrough": "Durchgestrichen",
+        "bulletList": "Aufzählung",
+        "numberedList": "Nummerierte Liste",
+        "alignLeft": "Linksbündig",
+        "alignCenter": "Zentriert",
+        "alignRight": "Rechtsbündig",
+        "quote": "Zitat",
+        "heading1": "Überschrift 1",
+        "heading2": "Überschrift 2",
+        "heading3": "Überschrift 3",
+        "undo": "Rückgängig",
+        "redo": "Wiederholen",
+        "history": "Verlauf",
+        "toolbar": "Formatierungsleiste",
+        "headings": "Überschriften",
+        "textFormatting": "Textformatierung",
+        "lists": "Listen",
+        "alignment": "Ausrichtung",
+        "contentArea": "Notizinhalt",
+        "placeholder": "Schreibe etwas…",
+        "image": "Bild einfügen"
+    },
+    "common": {
+        "close": "Schließen",
+        "confirm": "Bestätigen",
+        "cancel": "Abbrechen"
+    },
+    "save": {
+        "saving": "Wird gespeichert…",
+        "saved": "Gespeichert",
+        "error": "Speichern fehlgeschlagen"
+    },
+    "error": {
+        "loadFailed": "Notizen konnten nicht geladen werden",
+        "saveFailed": "Notizen konnten nicht gespeichert werden",
+        "indexOutOfRange": "Index {{index}} liegt außerhalb des gültigen Bereichs"
+    }
+}

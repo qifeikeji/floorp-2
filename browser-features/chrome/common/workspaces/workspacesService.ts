@@ -1,0 +1,605 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+import { onCleanup } from "solid-js";
+import { setWorkspacesDataStore, workspacesDataStore } from "./data/data";
+import type {
+  TWorkspace,
+  TWorkspaceID,
+  TWorkspacesStoreData,
+} from "./utils/type";
+import type {
+  WorkspacesDataManager,
+  WorkspacesDataManagerBase,
+} from "./workspacesDataManagerBase";
+import type { WorkspacesTabManager } from "./workspacesTabManager";
+import type { WorkspaceIcons } from "./utils/workspace-icons";
+import { WorkspaceManageModal } from "./workspace-modal";
+import i18next from "i18next";
+import {
+  createWorkspaceSnapshot,
+  ensureSessionStore,
+} from "./utils/workspace-snapshot";
+import { WorkspacesArchiveService } from "./utils/workspaces-archive-service";
+import type { TWorkspaceSnapshotTab } from "./utils/type";
+import type { WorkspaceArchiveSummary } from "./utils/archive-types";
+import {
+  WORKSPACE_LAST_SHOW_ID,
+  WORKSPACE_TAB_ATTRIBUTION_ID,
+  WORKSPACES_CHANGED_OBSERVER_TOPIC,
+} from "./utils/workspaces-static-names";
+
+export class WorkspacesService implements WorkspacesDataManagerBase {
+  dataManagerCtx: WorkspacesDataManager;
+  tabManagerCtx: WorkspacesTabManager;
+  iconCtx: WorkspaceIcons;
+  modalCtx: WorkspaceManageModal;
+  archiveService: WorkspacesArchiveService;
+
+  private cloneWorkspaceMap(source: unknown): Map<TWorkspaceID, TWorkspace> {
+    if (source instanceof Map) {
+      return new Map(source as Map<TWorkspaceID, TWorkspace>);
+    }
+    if (source && typeof source === "object") {
+      const entries = Object.entries(source as Record<string, TWorkspace>);
+      return new Map(
+        entries.map(([key, value]) => [key as TWorkspaceID, value]),
+      );
+    }
+    return new Map<TWorkspaceID, TWorkspace>();
+  }
+
+  private getWorkspaceCount(): number {
+    const data = workspacesDataStore.data;
+    if (data instanceof Map) {
+      return (data as Map<TWorkspaceID, TWorkspace>).size;
+    }
+    return 0;
+  }
+
+  private findFallbackWorkspaceID(
+    excludeId: TWorkspaceID,
+  ): TWorkspaceID | null {
+    const fromOrder = workspacesDataStore.order.find((id) => id !== excludeId);
+    if (fromOrder && this.isWorkspaceID(fromOrder)) {
+      return fromOrder;
+    }
+
+    for (const id of (
+      workspacesDataStore.data as unknown as Map<TWorkspaceID, TWorkspace>
+    ).keys()) {
+      if (id !== excludeId) {
+        return id;
+      }
+    }
+
+    return null;
+  }
+
+  constructor(
+    tabManagerCtx: WorkspacesTabManager,
+    iconCtx: WorkspaceIcons,
+    dataManagerCtx: WorkspacesDataManager,
+  ) {
+    this.tabManagerCtx = tabManagerCtx;
+    this.iconCtx = iconCtx;
+    this.dataManagerCtx = dataManagerCtx;
+    this.modalCtx = new WorkspaceManageModal(this, this.iconCtx);
+    this.archiveService = new WorkspacesArchiveService();
+    // deno-lint-ignore no-explicit-any
+    (globalThis as any).workspacesFuncs = {
+      createNoNameWorkspace: this.createNoNameWorkspace.bind(this),
+      changeWorkspaceToNext: this.changeWorkspaceToNext.bind(this),
+      changeWorkspaceToPrevious: this.changeWorkspaceToPrevious.bind(this),
+      captureWorkspaceSnapshot: this.captureWorkspaceSnapshot.bind(this),
+      archiveWorkspace: this.archiveWorkspace.bind(this),
+      listArchivedWorkspaces: this.listArchivedWorkspaces.bind(this),
+      restoreArchivedWorkspace: this.restoreArchivedWorkspace.bind(this),
+      deleteArchivedWorkspace: this.deleteArchivedWorkspace.bind(this),
+      resetWorkspaces: this.resetWorkspaces.bind(this),
+      getSelectedWorkspaceID: this.getSelectedWorkspaceID.bind(this),
+      changeWorkspace: this.changeWorkspace.bind(this),
+      isWorkspaceID: this.isWorkspaceID.bind(this),
+    };
+
+    if (workspacesDataStore.data.size === 0) {
+      const id = this.createNoNameWorkspace();
+      this.setDefaultWorkspace(id);
+      this.setCurrentWorkspaceID(id);
+    }
+
+    // Register persistTabAttribute early (after promiseInitialized) so
+    // SessionStore knows to save/restore our custom tab attributes.
+    // IMPORTANT: This must happen before restoration completes so that
+    // SessionStore includes floorpWorkspaceId in the restored tab data.
+    globalThis.SessionStore.promiseInitialized.then(() => {
+      globalThis.SessionStore.persistTabAttribute(WORKSPACE_TAB_ATTRIBUTION_ID);
+      globalThis.SessionStore.persistTabAttribute(WORKSPACE_LAST_SHOW_ID);
+    });
+
+    // Delay TabOpen handler and ProgressListener registration until AFTER
+    // session restore completes. During restore (between promiseInitialized
+    // and promiseAllWindowsRestored), SessionStore recreates tabs whose
+    // floorpWorkspaceId attribute may not yet be set when TabOpen fires.
+    // If we handle TabOpen during that window, we incorrectly assign restored
+    // tabs to the default/current workspace, corrupting the workspace→tab
+    // mapping. See https://github.com/Floorp-Projects/Floorp/issues/2343
+    this.boundHandleTabOpen = this.handleTabOpen.bind(this);
+    (
+      globalThis as unknown as {
+        SessionStore: {
+          promiseInitialized: Promise<void>;
+          promiseAllWindowsRestored: Promise<void>;
+          persistTabAttribute: (attr: string) => void;
+        };
+      }
+    ).SessionStore.promiseAllWindowsRestored.then(() => {
+      globalThis.gBrowser.addTabsProgressListener(this.listener);
+      globalThis.gBrowser.tabContainer.addEventListener(
+        "TabOpen",
+        this.boundHandleTabOpen,
+      );
+    });
+
+    onCleanup(() => {
+      globalThis.gBrowser.removeTabsProgressListener(this.listener);
+      globalThis.gBrowser.tabContainer.removeEventListener(
+        "TabOpen",
+        this.boundHandleTabOpen,
+      );
+    });
+  }
+  setCurrentWorkspaceID(id: TWorkspaceID): void {
+    this.dataManagerCtx.setCurrentWorkspaceID(id);
+  }
+  setDefaultWorkspace(id: TWorkspaceID): void {
+    this.dataManagerCtx.setDefaultWorkspace(id);
+  }
+  isWorkspaceID(id: string): id is TWorkspaceID {
+    return this.dataManagerCtx.isWorkspaceID(id);
+  }
+  getRawWorkspace(id: TWorkspaceID): TWorkspace | undefined {
+    return this.dataManagerCtx.getRawWorkspace(id);
+  }
+  getSelectedWorkspaceID(): TWorkspaceID {
+    return this.dataManagerCtx.getSelectedWorkspaceID();
+  }
+  getDefaultWorkspaceID(): TWorkspaceID {
+    return this.dataManagerCtx.getDefaultWorkspaceID();
+  }
+  // for override
+  getCurrentWorkspaceUserContextId(): number {
+    const id = this.getSelectedWorkspaceID();
+    return this.getRawWorkspace(id)?.userContextId ?? 0;
+  }
+
+  deleteWorkspace(workspaceID: TWorkspaceID): void {
+    if (workspacesDataStore.data.size === 1) return;
+
+    const fallbackWorkspaceID = this.findFallbackWorkspaceID(workspaceID);
+    const defaultWorkspaceID = this.getDefaultWorkspaceID();
+    if (
+      defaultWorkspaceID === workspaceID &&
+      fallbackWorkspaceID &&
+      fallbackWorkspaceID !== workspaceID
+    ) {
+      this.setDefaultWorkspace(fallbackWorkspaceID);
+    }
+
+    this.tabManagerCtx.removeTabByWorkspaceId(
+      workspaceID,
+      fallbackWorkspaceID ?? undefined,
+    );
+    setWorkspacesDataStore("order", (prev) =>
+      prev.filter((v) => v !== workspaceID),
+    );
+    this.dataManagerCtx.deleteWorkspace(workspaceID);
+  }
+
+  /**
+   * Returns new workspace object with default name.
+   * @returns The new workspace id.
+   */
+  public createNoNameWorkspace(): TWorkspaceID {
+    const count = this.getWorkspaceCount();
+    const workspaceName = i18next.t("workspaces.service.new-workspace", {
+      count,
+    } as Record<string, unknown>) as string;
+
+    const id = this.dataManagerCtx.createWorkspace(workspaceName);
+    setWorkspacesDataStore("order", (prev) => [...prev, id]);
+    this.changeWorkspace(id);
+    return id;
+  }
+
+  /**
+   * @deprecated Use WorkspacesServices.createWorkspace instead.
+   */
+  createWorkspace(name: string): TWorkspaceID {
+    //This function is deprecated because WorkspacesService is wrapping this function
+    const id = this.dataManagerCtx.createWorkspace(name);
+    setWorkspacesDataStore("order", (prev) => [...prev, id]);
+    this.changeWorkspace(id);
+    return id;
+  }
+
+  changeWorkspaceToNext(): void {
+    const order = workspacesDataStore.order;
+    const currentID = this.getSelectedWorkspaceID();
+    const currentIndex = order.indexOf(currentID);
+    const nextIndex = (currentIndex + 1) % order.length;
+    const nextID = order[nextIndex];
+    this.changeWorkspace(nextID);
+  }
+
+  changeWorkspaceToPrevious(): void {
+    const order = workspacesDataStore.order;
+    const currentID = this.getSelectedWorkspaceID();
+    const currentIndex = order.indexOf(currentID);
+    const previousIndex = (currentIndex - 1 + order.length) % order.length;
+    const previousID = order[previousIndex];
+    this.changeWorkspace(previousID);
+  }
+
+  reorderWorkspaceUp(id: TWorkspaceID): void {
+    setWorkspacesDataStore("order", (prev) => {
+      const index = prev.indexOf(id);
+      if (index > 0) {
+        [prev[index - 1], prev[index]] = [prev[index], prev[index - 1]];
+      }
+      return [...prev];
+    });
+  }
+
+  reorderWorkspaceDown(id: TWorkspaceID): void {
+    setWorkspacesDataStore("order", (prev) => {
+      const index = prev.indexOf(id);
+      if (index < prev.length - 1) {
+        [prev[index], prev[index + 1]] = [prev[index + 1], prev[index]];
+      }
+      return [...prev];
+    });
+  }
+
+  /**
+   * Move workspace to a specific index position.
+   * This method allows moving workspaces freely via drag & drop,
+   * including the default workspace.
+   * @param id The workspace ID to move.
+   * @param targetIndex The target index position (0-based).
+   */
+  reorderWorkspaceTo(id: TWorkspaceID, targetIndex: number): void {
+    setWorkspacesDataStore("order", (prev) => {
+      const currentIndex = prev.indexOf(id);
+      if (
+        currentIndex === -1 ||
+        targetIndex < 0 ||
+        targetIndex >= prev.length
+      ) {
+        return prev;
+      }
+      if (currentIndex === targetIndex) {
+        return prev;
+      }
+      const newOrder = [...prev];
+      newOrder.splice(currentIndex, 1);
+      newOrder.splice(targetIndex, 0, id);
+      return newOrder;
+    });
+  }
+
+  /**
+   * Open manage workspace dialog. This function should not be called directly on Preferences page.
+   * @param workspaceId If workspaceId is provided, the dialog will select the workspace for editing.
+   */
+  public async manageWorkspaceFromDialog(id?: TWorkspaceID) {
+    const targetWorkspaceID = id ?? this.getSelectedWorkspaceID();
+    const result = await this.modalCtx.showWorkspacesModal(targetWorkspaceID);
+    if (result === null) return;
+    const { name, icon, userContextId } = result;
+    const workspace = this.getRawWorkspace(targetWorkspaceID);
+    if (!workspace) return;
+    const newWorkspace: TWorkspace = {
+      ...workspace,
+      name: name as string,
+      icon: icon as string,
+      userContextId: Number(userContextId),
+    };
+    setWorkspacesDataStore("data", (prev) => {
+      const temp = this.cloneWorkspaceMap(prev);
+      temp.set(targetWorkspaceID, newWorkspace);
+      return temp as unknown as TWorkspacesStoreData["data"];
+    });
+    this.tabManagerCtx.updateTabsVisibility();
+    return result;
+  }
+
+  public changeWorkspace(id: TWorkspaceID) {
+    this.tabManagerCtx.changeWorkspace(id);
+    Services.obs.notifyObservers(
+      null as unknown as nsISupports,
+      WORKSPACES_CHANGED_OBSERVER_TOPIC,
+      id,
+    );
+  }
+
+  public async captureWorkspaceSnapshot(id?: TWorkspaceID) {
+    const targetWorkspaceId = id ?? this.getSelectedWorkspaceID();
+    return await createWorkspaceSnapshot(
+      targetWorkspaceId,
+      this.dataManagerCtx,
+    );
+  }
+
+  public async archiveWorkspace(id?: TWorkspaceID) {
+    const targetWorkspaceId = id ?? this.getSelectedWorkspaceID();
+    if (!this.isWorkspaceID(targetWorkspaceId)) {
+      return null;
+    }
+
+    if (this.getWorkspaceCount() <= 1) {
+      console.warn(
+        "WorkspacesService: cannot archive the last remaining workspace",
+      );
+      return null;
+    }
+
+    const snapshot = await this.captureWorkspaceSnapshot(targetWorkspaceId);
+    if (!snapshot) {
+      return null;
+    }
+
+    const archiveId = await this.archiveService.saveSnapshot(snapshot);
+    this.deleteWorkspace(targetWorkspaceId);
+    return archiveId;
+  }
+
+  public async listArchivedWorkspaces(): Promise<WorkspaceArchiveSummary[]> {
+    return await this.archiveService.listSnapshots();
+  }
+
+  public async deleteArchivedWorkspace(archiveId: string): Promise<boolean> {
+    try {
+      await this.archiveService.removeSnapshot(archiveId);
+      return true;
+    } catch (error) {
+      console.error(
+        "WorkspacesService: failed to delete archived workspace",
+        error,
+      );
+      return false;
+    }
+  }
+
+  public async restoreArchivedWorkspace(archiveId: string) {
+    const snapshot = await this.archiveService.loadSnapshot(archiveId);
+    if (!snapshot) {
+      console.warn(
+        "WorkspacesService: no snapshot found for archive",
+        archiveId,
+      );
+      return null;
+    }
+
+    const restoredWorkspaceId = this.dataManagerCtx.createWorkspace(
+      snapshot.workspace.name,
+    );
+    setWorkspacesDataStore("order", (prev) => [...prev, restoredWorkspaceId]);
+    setWorkspacesDataStore("data", (prev) => {
+      const temp = this.cloneWorkspaceMap(prev);
+      const workspace = temp.get(restoredWorkspaceId);
+      if (workspace) {
+        temp.set(restoredWorkspaceId, {
+          ...workspace,
+          icon: snapshot.workspace.icon,
+          userContextId: snapshot.workspace.userContextId,
+        });
+      }
+      return temp as unknown as TWorkspacesStoreData["data"];
+    });
+
+    await this.restoreTabsFromSnapshot(restoredWorkspaceId, snapshot.tabs);
+
+    await this.archiveService.removeSnapshot(archiveId);
+
+    this.changeWorkspace(restoredWorkspaceId);
+    return restoredWorkspaceId;
+  }
+
+  /**
+   * Reset the workspace store to its default state and assign all tabs to the new workspace.
+   * @returns The newly created workspace id.
+   */
+  public resetWorkspaces(): TWorkspaceID {
+    console.info("WorkspacesService: resetting workspace data to defaults");
+
+    setWorkspacesDataStore(
+      "data",
+      () =>
+        new Map<
+          TWorkspaceID,
+          TWorkspace
+        >() as unknown as TWorkspacesStoreData["data"],
+    );
+    setWorkspacesDataStore("order", () => [] as TWorkspacesStoreData["order"]);
+
+    const newWorkspaceId = this.createNoNameWorkspace();
+    this.setDefaultWorkspace(newWorkspaceId);
+    this.setCurrentWorkspaceID(newWorkspaceId);
+
+    try {
+      const gBrowser = globalThis.gBrowser as
+        | {
+            tabs: XULElement[];
+            showTab: (tab: XULElement) => void;
+          }
+        | undefined;
+
+      if (gBrowser?.tabs) {
+        for (const tab of gBrowser.tabs) {
+          if (!tab) continue;
+          this.tabManagerCtx.setWorkspaceIdToAttribute(tab, newWorkspaceId);
+          tab.removeAttribute(WORKSPACE_LAST_SHOW_ID);
+        }
+        this.tabManagerCtx.updateTabsVisibility();
+      }
+    } catch (error) {
+      console.error(
+        "WorkspacesService: failed to reassign tabs on reset",
+        error,
+      );
+    }
+
+    return newWorkspaceId;
+  }
+
+  private async restoreTabsFromSnapshot(
+    workspaceId: TWorkspaceID,
+    tabs: TWorkspaceSnapshotTab[],
+  ) {
+    if (!tabs.length) {
+      return;
+    }
+
+    const sessionStore = await ensureSessionStore();
+    let targetTab: XULElement | null = null;
+
+    for (const tabSnapshot of tabs) {
+      const initialUrl = tabSnapshot.url ?? "about:blank";
+      const tab = globalThis.gBrowser.addTab(initialUrl, {
+        skipAnimation: true,
+        inBackground: true,
+        userContextId: tabSnapshot.userContextId,
+        triggeringPrincipal:
+          Services.scriptSecurityManager.getSystemPrincipal(),
+      });
+
+      this.tabManagerCtx.setWorkspaceIdToAttribute(tab, workspaceId);
+      tab.setAttribute("usercontextid", String(tabSnapshot.userContextId));
+
+      if (tabSnapshot.lastShownWorkspaceId) {
+        tab.setAttribute(
+          WORKSPACE_LAST_SHOW_ID,
+          tabSnapshot.lastShownWorkspaceId,
+        );
+      } else {
+        tab.removeAttribute(WORKSPACE_LAST_SHOW_ID);
+      }
+
+      if (tabSnapshot.state) {
+        try {
+          const clonedState = structuredClone(tabSnapshot.state);
+          const attributes =
+            (clonedState.attributes as Record<string, unknown> | undefined) ??
+            {};
+          attributes[WORKSPACE_TAB_ATTRIBUTION_ID] = workspaceId;
+          if (tabSnapshot.lastShownWorkspaceId) {
+            attributes[WORKSPACE_LAST_SHOW_ID] =
+              tabSnapshot.lastShownWorkspaceId;
+          } else if (WORKSPACE_LAST_SHOW_ID in attributes) {
+            delete attributes[WORKSPACE_LAST_SHOW_ID];
+          }
+          clonedState.attributes = attributes;
+          sessionStore.setTabState(tab, JSON.stringify(clonedState));
+        } catch (error) {
+          console.error(
+            "WorkspacesService: failed to restore tab state",
+            error,
+          );
+        }
+      } else if (tabSnapshot.url) {
+        try {
+          globalThis.gBrowser
+            .getBrowserForTab(tab)
+            .loadURI(Services.io.newURI(tabSnapshot.url), {
+              triggeringPrincipal:
+                Services.scriptSecurityManager.getSystemPrincipal(),
+            });
+        } catch (error) {
+          console.error("WorkspacesService: failed to load tab URL", error);
+        }
+      }
+
+      if (tabSnapshot.pinned) {
+        try {
+          globalThis.gBrowser.pinTab(tab);
+        } catch (error) {
+          console.error("WorkspacesService: failed to pin restored tab", error);
+        }
+      }
+
+      if (tabSnapshot.isSelected) {
+        targetTab = tab;
+      }
+    }
+
+    if (targetTab) {
+      globalThis.gBrowser.selectedTab = targetTab;
+    }
+
+    this.tabManagerCtx.updateTabsVisibility();
+  }
+
+  /**
+   * Location Change Listener.
+   */
+  private listener = {
+    /**
+     * Listener for location change. This function will monitor the location change and check the tabs visibility.
+     * @returns void
+     */
+    onLocationChange: () => {
+      this.tabManagerCtx.updateTabsVisibility();
+    },
+  };
+
+  private boundHandleTabOpen: (event: Event) => void;
+
+  /**
+   * Handle TabOpen event to apply workspace container to new tabs.
+   * This ensures tabs opened from bookmarks, external links, etc. use the current workspace's container.
+   */
+  private handleTabOpen = (event: Event) => {
+    const tabEvent = event as CustomEvent;
+    const tab = (tabEvent.target || tabEvent.detail) as XULElement;
+    if (!tab) {
+      return;
+    }
+
+    // Check if tab already has a workspace ID assigned
+    const workspaceId = this.tabManagerCtx.getWorkspaceIdFromAttribute(tab);
+    const currentWorkspaceId = this.getSelectedWorkspaceID();
+
+    // If tab doesn't have a workspace ID, assign it to current workspace
+    if (!workspaceId) {
+      this.tabManagerCtx.setWorkspaceIdToAttribute(tab, currentWorkspaceId);
+    }
+
+    // Get the workspace ID that should be used (either existing or current)
+    const targetWorkspaceId = workspaceId || currentWorkspaceId;
+    const workspace = this.getRawWorkspace(targetWorkspaceId);
+    const workspaceUserContextId = workspace?.userContextId ?? 0;
+
+    // Only apply userContextId if:
+    // 1. Workspace has a container (userContextId > 0)
+    // 2. Tab doesn't already have a userContextId set (or it's 0/default)
+    const currentTabUserContextId = Number.parseInt(
+      tab.getAttribute("usercontextid") || "0",
+      10,
+    );
+
+    if (workspaceUserContextId > 0 && currentTabUserContextId === 0) {
+      // Apply workspace container to the tab
+      tab.setAttribute("usercontextid", String(workspaceUserContextId));
+      console.debug(
+        "WorkspacesService: Applied workspace container to new tab",
+        {
+          workspaceId: targetWorkspaceId,
+          userContextId: workspaceUserContextId,
+        },
+      );
+    }
+  };
+}

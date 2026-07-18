@@ -1,0 +1,54 @@
+{
+    "title": "Floorp Start",
+    "topSites": {
+        "addSite": "Adicionar site",
+        "addNewSite": "Adicionar novo site",
+        "url": "URL",
+        "label": "Marcador",
+        "cancel": "Cancelar",
+        "add": "Adicionar",
+        "close": "Fechar",
+        "labelPlaceholder": "Nome do site",
+        "pin": "Fixar",
+        "unpin": "Desafixar",
+        "block": "Bloquear",
+        "blockTitle": "Bloquear \"{{title}}\"?",
+        "blockConfirm": "Este site será removido dos seus principais sites e não será sugerido novamente. Você pode gerenciar sites bloqueados nas configurações.",
+        "invalidUrl": "URL inválida"
+    },
+    "settings": {
+        "newTabSettings": "Configurações de novas abas",
+        "displayComponents": "Exibir componentes",
+        "topSites": "Principais sites",
+        "clock": "Relógio",
+        "searchBar": "Barra de pesquisa",
+        "backgroundSettings": "Configurações de plano de fundo",
+        "noBackground": "Sem plano de fundo",
+        "randomImage": "Imagem aleatória",
+        "customImage": "Imagem personalizada",
+        "folderImages": "Imagens de pasta",
+        "floorpImages": "Imagens do Floorp",
+        "currentImage": "Imagem atual:",
+        "imageRecommendation": "Recomendação: Use imagens com resolução de 1920x1080 ou superior.",
+        "currentFolder": "Pasta atual:",
+        "selectFolder": "Selecionar pasta",
+        "selected": "Selecionado",
+        "enableSlideshow": "Ativar slideshow",
+        "slideshowInterval": "Intervalo (segundos)",
+        "floorpStart": "Floorp Start",
+        "disableFloorpStart": "Desativar Floorp Start (use o clássico \"about:newtab\")",
+        "disableFloorpStartDescription": "Quando ativado, o Floorp Start será substituído pela página de nova aba/inicial clássica do Firefox.",
+        "restartRequired": "Requer a reinicialização do navegador para ter efeito total.",
+        "firefoxLayout": "Usar o layout clássico (como o Firefox Home)"
+    },
+    "searchBar": {
+        "searchOrEnterUrl": "Pesquisar ou digitar URL",
+        "loadingSearchEngines": "Carregando mecanismos de busca..."
+    },
+    "settingsButton": {
+        "settings": "Configurações"
+    },
+    "modal": {
+        "close": "Fechar"
+    }
+}

@@ -1,0 +1,24 @@
+{
+    "profileManager": {
+        "title": "Profiler",
+        "buttons": {
+            "refresh": "Refresh",
+            "create": "Skapa"
+        },
+        "loading": "Laddar…",
+        "noProfiles": "Inga profiler hittades.",
+        "current": "Nuvarande",
+        "default": "Standard",
+        "actions": {
+            "open": "Open",
+            "new": "Nytt",
+            "rename": "Byt namn",
+            "remove": "Ta bort",
+            "setDefault": "Standard"
+        },
+        "prompts": {
+            "confirmRemove": "Är du säker du vill ta bort denna profil?",
+            "newName": "Nytt profilnamn:"
+        }
+    }
+}

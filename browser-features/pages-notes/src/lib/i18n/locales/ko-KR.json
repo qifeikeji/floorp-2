@@ -1,0 +1,69 @@
+{
+    "title": {
+        "default": "{{productName}} 노트"
+    },
+    "notes": {
+        "welcome": "{{productName}} 노트에 오신 것을 환영합니다!",
+        "welcomeContent": "{{productName}} 노트에 오신 것을 환영합니다! 사용 방법은 다음과 같습니다.\n\n{{productName}} 노트는 여러 장치에서 동기화할 수 있는 노트 필기 기능입니다. 동기화를 사용하려면 Mozilla 계정으로 {{productName}} 에 로그인해야 합니다.\n{{productName}} 노트는 {{productName}} 에 저장되며 Firefox 동기화를 사용해 여러 장치에서 동기화됩니다. Firefox 동기화는 Mozilla 계정 비밀번호로 동기화 내용을 암호화하므로 아무도 그 내용을 알 수 없습니다.",
+        "new": "새 노트",
+        "reorder": "재정렬",
+        "done": "완료",
+        "emptyTitle": "제목 없음",
+        "emptyContent": "내용 없음",
+        "noNotesSelected": "노트를 선택하거나 새 노트를 만드세요",
+        "createNew": "새 노트 만들기",
+        "titlePlaceholder": "제목",
+        "loading": "노트 로딩 중...",
+        "delete": "삭제",
+        "empty": "아직 노트가 없습니다. 새 노트를 만들려면 \"새 노트\"를 클릭하세요.",
+        "deleteConfirmTitle": "노트 삭제",
+        "deleteConfirmMessage": "파일을 삭제할까요? 이 작업은 절대로 취소할 수 없습니다.",
+        "deleteConfirm": "삭제",
+        "deleteCancel": "취소",
+        "noteList": "노트 목록",
+        "search": "노트 검색",
+        "clearSearch": "검색 초기화",
+        "noSearchResults": "검색과 일치하는 노트가 없습니다"
+    },
+    "editor": {
+        "bold": "굵음체",
+        "italic": "기울임체",
+        "underline": "밑줄",
+        "strikethrough": "취소선",
+        "bulletList": "글머리 기호 목록",
+        "numberedList": "번호 목록",
+        "alignLeft": "왼쪽 맞춤",
+        "alignCenter": "중앙 정렬",
+        "alignRight": "오른쪽 정렬",
+        "quote": "인용",
+        "heading1": "제목 1",
+        "heading2": "제목 2",
+        "heading3": "제목 3",
+        "undo": "실행 취소",
+        "redo": "다시 실행",
+        "history": "기록",
+        "toolbar": "서식 지정 도구 모음",
+        "headings": "제목",
+        "textFormatting": "본문 형식",
+        "lists": "목록",
+        "alignment": "정렬",
+        "contentArea": "노트 내용",
+        "placeholder": "쓰기 시작...",
+        "image": "이미지 삽입"
+    },
+    "common": {
+        "close": "닫기",
+        "confirm": "확인",
+        "cancel": "취소"
+    },
+    "save": {
+        "saving": "저장 중...",
+        "saved": "저장됨",
+        "error": "저장 실패"
+    },
+    "error": {
+        "loadFailed": "노트 데이터 로드 실패",
+        "saveFailed": "노트 데이터 로드 실패",
+        "indexOutOfRange": "인덱스 {{index}} 이 범위를 벗어났습니다."
+    }
+}

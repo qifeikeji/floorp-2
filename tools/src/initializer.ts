@@ -1,0 +1,622 @@
+// SPDX-License-Identifier: MPL-2.0
+
+import * as path from "@std/path";
+import {
+  BRANDING,
+  PLATFORM,
+  VERSION,
+  PATHS,
+  BIN_DIR,
+  BIN_ROOT_DIR,
+  BIN_PATH_EXE,
+  BIN_VERSION,
+  getBinArchive,
+} from "./defines.ts";
+import type { BinArchive, Platform } from "./defines.ts";
+import { Logger, runCommand, exists, safeRemove } from "./utils.ts";
+
+const logger = new Logger("initializer");
+
+const RUNTIME_BASE_URL = "https://dev-assets.floorp.app/floorp-runtime-builds/";
+const RUNTIME_INDEX_URL = `${RUNTIME_BASE_URL}.ftp-deploy-sync-state.json`;
+
+interface RuntimeDeployEntry {
+  type: string;
+  name: string;
+  size?: number;
+  hash?: string;
+}
+
+interface RuntimeDeployIndex {
+  description?: string;
+  version?: string;
+  generatedTime?: number;
+  data?: RuntimeDeployEntry[];
+}
+
+const PLATFORM_KEYWORDS: Record<Platform, string[]> = {
+  windows: ["windows", "win"],
+  darwin: ["macos", "mac", "darwin"],
+  linux: ["linux"],
+};
+
+const ARCH_KEYWORDS: Record<BinArchive["architecture"], string[]> = {
+  x86_64: ["x86_64", "x64", "amd64"],
+  aarch64: ["aarch64", "arm64"],
+  universal: ["universal"],
+};
+
+const normalizeName = (value: string): string => value.toLowerCase();
+
+export const filterRuntimeEntries = (
+  index: RuntimeDeployIndex,
+): RuntimeDeployEntry[] => {
+  if (!index?.data || !Array.isArray(index.data)) return [];
+  return index.data.filter(
+    (entry): entry is RuntimeDeployEntry =>
+      !!entry &&
+      typeof entry.name === "string" &&
+      entry.type === "file" &&
+      entry.name.length > 0,
+  );
+};
+
+export const scoreRuntimeEntry = (
+  entryName: string,
+  binArchive: BinArchive,
+): number => {
+  const name = normalizeName(entryName);
+  let score = 0;
+
+  PLATFORM_KEYWORDS[binArchive.platform].forEach((keyword) => {
+    if (name.includes(keyword)) score += 50;
+  });
+
+  ARCH_KEYWORDS[binArchive.architecture].forEach((keyword) => {
+    if (name.includes(keyword)) score += 40;
+  });
+
+  if (name.includes("artifact")) score += 5;
+  if (name.endsWith(".zip")) score += 5;
+  return score;
+};
+
+export const pickRuntimeEntry = (
+  entries: RuntimeDeployEntry[],
+  binArchive: BinArchive,
+): RuntimeDeployEntry => {
+  const scored = entries
+    .map((entry) => ({
+      entry,
+      score: scoreRuntimeEntry(entry.name, binArchive),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored[0];
+  if (!best) {
+    throw new Error("No runtime artifacts available to download.");
+  }
+  if (best.score <= 0) {
+    logger.warn(
+      "No strong runtime artifact match found. Using the first available entry: %s",
+      best.entry.name,
+    );
+  }
+  return best.entry;
+};
+
+const buildRuntimeUrl = (entryName: string): string =>
+  `${RUNTIME_BASE_URL}${entryName}`;
+
+const fetchRuntimeIndex = async (): Promise<RuntimeDeployIndex> => {
+  const maxAttempts = 5;
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const resp = await fetch(RUNTIME_INDEX_URL, {
+        headers: { Accept: "application/json" },
+        redirect: "follow",
+      });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} while fetching runtime index`);
+      }
+
+      const index = (await resp.json()) as RuntimeDeployIndex;
+      if (filterRuntimeEntries(index).length === 0) {
+        throw new Error(
+          "Runtime build index does not contain any downloadable file entries.",
+        );
+      }
+
+      return index;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < maxAttempts) {
+        const delayMs = 1000 * attempt;
+        logger.warn(
+          `Runtime index fetch failed (attempt ${attempt}/${maxAttempts}): ${lastError.message}. Retrying in ${delayMs}ms...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  throw lastError ?? new Error("Failed to fetch runtime index");
+};
+
+/**
+ * Entry point: ensure binary is present and preferences saved.
+ */
+export async function run(): Promise<void> {
+  const hasVersion = exists(BIN_VERSION);
+  const hasBin = exists(BIN_PATH_EXE);
+  let needInit = false;
+
+  logger.info(BIN_VERSION);
+
+  if (hasBin && hasVersion) {
+    const version = Deno.readTextFileSync(BIN_VERSION).trim();
+    if (VERSION !== version) {
+      logger.warn(
+        `Version mismatch: ${version} !== ${VERSION}. Re-extracting.`,
+      );
+      safeRemove(BIN_ROOT_DIR);
+      needInit = true;
+    } else {
+      logger.info("Binary version matches. No initialization needed.");
+    }
+  } else if (hasBin && !hasVersion) {
+    logger.info(
+      `Binary exists but version file is missing. Writing ${VERSION}.`,
+    );
+    Deno.mkdirSync(BIN_DIR, { recursive: true });
+    Deno.writeTextFileSync(BIN_VERSION, VERSION);
+    logger.success("Initialization complete.");
+  } else if (!hasBin && hasVersion) {
+    logger.error(
+      "Version file exists but binary is missing. Abnormal termination.",
+    );
+    throw new Error("Unreachable: !has_bin && has_version");
+  } else {
+    logger.info("Binary not found. Extracting.");
+    needInit = true;
+  }
+
+  if (needInit) {
+    Deno.mkdirSync(BIN_ROOT_DIR, { recursive: true });
+    await decompressBin();
+    logger.success("Initialization complete.");
+  }
+
+  savePrefsForProfile();
+}
+
+export function savePrefsForProfile(): void {
+  const profileDir = PATHS.profile_test;
+  const userJsPath = path.join(profileDir, "user.js");
+
+  const userJsContent = `/**
+ *! DO NOT EDIT THIS FILE.
+ *
+ ** This file is AUTOGENERATED
+ ** Please modify the 'tools/lib/initializer.rb' in the repo.
+ */
+user_pref("devtools.debugger.prompt-connection", false);
+user_pref("security.disallow_privileged_https_script_loads", false);
+user_pref("security.allow_parent_unrestricted_js_loads", true);
+user_pref("remote.active-protocols", 0);
+user_pref("marionette.enabled", true);
+user_pref("marionette.port", 2828);
+user_pref("devtools.chrome.enabled", true);
+user_pref("browser.newtabpage.enabled", true);
+`;
+
+  Deno.mkdirSync(profileDir, { recursive: true });
+  Deno.writeTextFileSync(userJsPath, userJsContent);
+  logger.info(`Wrote developer preferences to ${userJsPath}`);
+}
+
+async function extractNestedZip(
+  outerZipPath: string,
+  extractToDir: string,
+): Promise<void> {
+  const tempDir = "_dist/temp_extract_" + Date.now();
+  await Deno.mkdir(tempDir);
+
+  try {
+    logger.info("Extracting outer zip...");
+
+    // Extract outer zip to temp directory
+    switch (PLATFORM) {
+      case "windows":
+        try {
+          runCommand("tar", ["-xf", outerZipPath, "-C", tempDir]);
+        } catch {
+          runCommand("powershell", [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            `Expand-Archive -LiteralPath '${outerZipPath}' -DestinationPath '${tempDir}' -Force`,
+          ]);
+        }
+        break;
+      case "darwin":
+      case "linux":
+        runCommand("unzip", ["-q", outerZipPath, "-d", tempDir]);
+        break;
+    }
+
+    // Find the inner zip file
+    let innerZipPath: string | null = null;
+    for (const entry of Deno.readDirSync(tempDir)) {
+      if (entry.name.endsWith(".zip")) {
+        innerZipPath = path.join(tempDir, entry.name);
+        break;
+      }
+    }
+
+    if (!innerZipPath) {
+      throw new Error("No inner zip file found in the extracted archive");
+    }
+
+    logger.info("Extracting inner zip...");
+
+    // Extract inner zip to final destination
+    switch (PLATFORM) {
+      case "windows":
+        try {
+          runCommand("tar", ["-xf", innerZipPath, "-C", extractToDir]);
+        } catch {
+          runCommand("powershell", [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            `Expand-Archive -LiteralPath '${innerZipPath}' -DestinationPath '${extractToDir}' -Force`,
+          ]);
+        }
+        break;
+      case "darwin":
+      case "linux":
+        runCommand("unzip", ["-q", innerZipPath, "-d", extractToDir]);
+        break;
+    }
+
+    // Set proper permissions on Unix-like systems
+    if (PLATFORM !== "windows") {
+      try {
+        runCommand("chmod", ["-R", "755", extractToDir]);
+      } catch {
+        // Ignore chmod errors
+      }
+    }
+  } finally {
+    // Clean up temp directory
+    try {
+      Deno.removeSync(tempDir, { recursive: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+export async function decompressBin(): Promise<void> {
+  const binArchive = getBinArchive();
+  let archivePath = path.resolve(binArchive.filename);
+
+  if (!exists(archivePath)) {
+    const cwd = Deno.cwd();
+    const expectedExt =
+      binArchive.format === "tar.xz"
+        ? ".tar.xz"
+        : path.extname(binArchive.filename);
+    for (const entry of Deno.readDirSync(cwd)) {
+      if (entry.isFile && entry.name.endsWith(expectedExt)) {
+        logger.info(`Found alternative artifact: ${entry.name}`);
+        archivePath = path.resolve(entry.name);
+        break;
+      }
+    }
+  }
+
+  logger.info(`Binary extraction started: ${path.basename(archivePath)}`);
+
+  if (!exists(archivePath)) {
+    logger.warn(
+      `${binArchive.filename} not found. Downloading from GitHub release.`,
+    );
+    await downloadBin(binArchive.filename);
+    archivePath = path.resolve(binArchive.filename);
+  }
+
+  try {
+    // Handle nested zip extraction
+    if (binArchive.filename.endsWith(".zip")) {
+      await extractNestedZip(archivePath, BIN_ROOT_DIR);
+    } else {
+      // Handle other archive formats (DMG, tar.xz, etc.)
+      switch (PLATFORM) {
+        case "windows":
+          throw new Error("Non-zip archives not supported on Windows");
+
+        case "darwin": {
+          logger.info("macOS extraction (hdiutil)");
+          const mountPoint = await Deno.makeTempDir({
+            prefix: "nora_dmg_mount_",
+          });
+          try {
+            runCommand("hdiutil", [
+              "attach",
+              "-nobrowse",
+              "-quiet",
+              "-mountpoint",
+              mountPoint,
+              archivePath,
+            ]);
+            const subdir = path.join(BIN_ROOT_DIR, BRANDING.base_name);
+            Deno.mkdirSync(subdir, { recursive: true });
+            runCommand("cp", ["-a", `${mountPoint}/.`, subdir]);
+
+            // Rename any .app to BRANDING.display_name.app
+            for (const entry of Deno.readDirSync(subdir)) {
+              if (entry.isDirectory && entry.name.endsWith(".app")) {
+                const oldPath = path.join(subdir, entry.name);
+                const newName = BRANDING.display_name + ".app";
+                const newPath = path.join(subdir, newName);
+                if (entry.name !== newName) {
+                  logger.info(`Renaming ${entry.name} to ${newName}`);
+                  Deno.renameSync(oldPath, newPath);
+                }
+              }
+            }
+
+            try {
+              runCommand("xattr", ["-rc", BIN_ROOT_DIR]);
+            } catch {
+              // xattr might not be present; ignore
+            }
+            runCommand("chmod", ["-R", "755", BIN_ROOT_DIR]);
+            // Patch Info.plist to inject developer repo/obj path equal to
+            // the extracted directory so GetRepoDir can find it without
+            // editing C++ sources.
+            try {
+              const macUtils = await import("./macos_utils.ts");
+              await macUtils.patchAppInfoPlists(subdir, subdir, subdir);
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              logger.warn(`macOS Info.plist patch skipped: ${msg}`);
+            }
+          } finally {
+            try {
+              runCommand("hdiutil", ["detach", "-quiet", mountPoint]);
+            } catch {
+              // ignore detach failures
+            }
+          }
+          break;
+        }
+
+        case "linux": {
+          runCommand("tar", ["-xJf", archivePath, "-C", BIN_ROOT_DIR]);
+          runCommand("chmod", ["-R", "755", BIN_ROOT_DIR]);
+          break;
+        }
+
+        default:
+          throw new Error(`Unsupported platform: ${PLATFORM}`);
+      }
+    }
+
+    Deno.writeTextFileSync(BIN_VERSION, VERSION);
+    logger.success("Extraction complete!");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.error(`Error during extraction: ${msg}`);
+    Deno.exit(1);
+  }
+}
+
+export async function downloadBin(filename: string): Promise<void> {
+  const binArchive = getBinArchive();
+  const index = await fetchRuntimeIndex();
+  const entries = filterRuntimeEntries(index);
+
+  if (!entries.length) {
+    throw new Error(
+      "Runtime build index does not contain any downloadable file entries.",
+    );
+  }
+
+  const picked = pickRuntimeEntry(entries, binArchive);
+  const downloadUrl = buildRuntimeUrl(picked.name);
+  logger.info(
+    `Downloading runtime artifact '${picked.name}' for ${binArchive.platform}/${binArchive.architecture}`,
+  );
+
+  const resp = await fetch(downloadUrl, { redirect: "follow" });
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status} while downloading ${downloadUrl}`);
+  }
+
+  // Helper: stream response to file with progress logs
+  const streamToFile = async (
+    response: Response,
+    outPath: string,
+    label: string,
+    rewritePrevLogLine = false,
+  ): Promise<void> => {
+    const total = Number(response.headers.get("content-length") ?? "0");
+    const encoder = new TextEncoder();
+    const upOne = "\x1b[1A";
+    const clearLine = "\x1b[2K";
+    const logPrefix = "[initializer] INFO: ";
+    const writeProgress = async (text: string) => {
+      if (rewritePrevLogLine) {
+        const line = `${upOne}${clearLine}${logPrefix}${text}\n`;
+        await Deno.stdout.write(encoder.encode(line));
+      } else {
+        logger.info(text);
+      }
+    };
+    try {
+      const outDir = path.dirname(outPath);
+      try {
+        if (outDir && outDir !== ".") {
+          await Deno.mkdir(outDir, { recursive: true });
+        }
+      } catch {
+        // ignore
+      }
+      const file = await Deno.open(outPath, {
+        create: true,
+        write: true,
+        truncate: true,
+      });
+      try {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          const buf = new Uint8Array(await response.arrayBuffer());
+          await file.write(buf);
+          return;
+        }
+        let downloaded = 0;
+        let lastPct = -1;
+        let lastTime = 0;
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            await file.write(value);
+            downloaded += value.byteLength;
+            const now = Date.now();
+            if (total > 0) {
+              const pct = Math.floor((downloaded / total) * 100);
+              if (pct !== lastPct && (pct % 5 === 0 || now - lastTime > 1000)) {
+                lastPct = pct;
+                lastTime = now;
+                await writeProgress(
+                  `${label}: ${pct}% (${(downloaded / 1048576).toFixed(1)}MB/${(total / 1048576).toFixed(1)}MB)`,
+                );
+              }
+            } else if (now - lastTime > 1000) {
+              lastTime = now;
+              await writeProgress(
+                `${label}: ${(downloaded / 1048576).toFixed(1)}MB`,
+              );
+            }
+          }
+        }
+      } finally {
+        file.close();
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`Failed to write ${outPath}: ${msg}`);
+    }
+  };
+
+  // If the expected target is a .zip, save as-is (nested unzip is handled later).
+  const isZipExpected = filename.toLowerCase().endsWith(".zip");
+  if (isZipExpected) {
+    await streamToFile(
+      resp,
+      path.resolve(filename),
+      "Downloading artifact",
+      true,
+    );
+    logger.success(`Downloaded artifact zip to ${filename}`);
+    return;
+  }
+
+  // Non-zip expected (e.g., .tar.xz, .dmg): extract inner file from the downloaded zip.
+  const tmpZipPath = path.resolve(
+    `_dist/runtime_artifact_${Date.now()}_${picked.name}`,
+  );
+  const tmpExtractDir = `_dist/runtime_artifact_extract_${Date.now()}`;
+  try {
+    await Deno.mkdir(path.dirname(tmpZipPath), { recursive: true });
+  } catch {
+    // ignore
+  }
+  await streamToFile(resp, tmpZipPath, "Downloading artifact", true);
+  await Deno.mkdir(tmpExtractDir);
+
+  try {
+    // Extract downloaded zip
+    switch (PLATFORM) {
+      case "windows":
+        try {
+          runCommand("tar", ["-xf", tmpZipPath, "-C", tmpExtractDir]);
+        } catch {
+          runCommand("powershell", [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            `Expand-Archive -LiteralPath '${tmpZipPath}' -DestinationPath '${tmpExtractDir}' -Force`,
+          ]);
+        }
+        break;
+      case "darwin":
+      case "linux":
+        runCommand("unzip", ["-q", tmpZipPath, "-d", tmpExtractDir]);
+        break;
+    }
+
+    // Recursively find the intended inner file
+    const wantedExt = filename.endsWith(".tar.xz")
+      ? ".tar.xz"
+      : path.extname(filename);
+
+    let pickedInner: string | null = null;
+    const stack: string[] = [tmpExtractDir];
+    while (stack.length) {
+      const dir = stack.pop()!;
+      for (const entry of Deno.readDirSync(dir)) {
+        const p = path.join(dir, entry.name);
+        if (entry.isDirectory) {
+          stack.push(p);
+          continue;
+        }
+        // Prefer exact filename
+        if (entry.name === filename) {
+          pickedInner = p;
+          break;
+        }
+        // Next, prefer extension match
+        if (wantedExt && entry.name.endsWith(wantedExt)) {
+          pickedInner ??= p;
+        }
+      }
+      if (pickedInner) break;
+    }
+
+    if (!pickedInner) {
+      throw new Error(
+        `Inner file with expected extension '${wantedExt}' not found in artifact '${picked.name}'.`,
+      );
+    }
+
+    // Move/copy to requested filename at CWD
+    const destPath = path.resolve(filename);
+    try {
+      Deno.copyFileSync(pickedInner, destPath);
+    } catch {
+      // fallback to read/write
+      const data = Deno.readFileSync(pickedInner);
+      Deno.writeFileSync(destPath, data);
+    }
+    logger.success(`Downloaded binary to ${filename}`);
+  } finally {
+    // Cleanup temp
+    try {
+      Deno.removeSync(tmpZipPath);
+    } catch {
+      // ignore
+    }
+    try {
+      Deno.removeSync(tmpExtractDir, { recursive: true });
+    } catch {
+      // ignore
+    }
+  }
+}
