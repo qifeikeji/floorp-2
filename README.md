@@ -46,5 +46,9 @@ GitHub Actions → **Build Linux AppImage** → Artifact `linux-x86_64-AppImage`
 ## 说明
 
 - 浏览器本体来自 [Mozilla 官方下载](https://www.mozilla.org/firefox/)，已是完整浏览器。
-- 加法内容：显示名、图标、AppImage 桌面项、禁用应用内自动更新（`distribution/policies.json`）。
-- about: 里部分仍可能显示 “Firefox”（资源在 `omni.ja` 内）；启动器 / 进程名 / AppImage 名已是你的品牌。
+- 打包时会**深入修改** `browser/omni.ja`（`brand.ftl`、品牌图、界面里的 “Firefox” 文案）、重命名二进制、跳过首次欢迎页。
+- 若你仍看到旧的「关于 Firefox / 欢迎使用 Firefox」：多半是**旧配置或旧解压目录**。请：
+  1. 重新构建 AppImage；
+  2. 删掉 AppImageLauncher 解压出的旧目录（如 `~/Applications/xingchen-.../`）；
+  3. 用新配置目录启动，例如：
+     `mkdir -p dist/xingchen.home && APPIMAGE_EXTRACT_AND_RUN=1 ./dist/xingchen-*.AppImage`

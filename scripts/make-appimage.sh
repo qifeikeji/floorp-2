@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 #
-# Download official Firefox (linux64), apply brand name + icons, build Type-2 AppImage.
-# Usage:
-#   ./scripts/make-appimage.sh [output-dir]
-#
-# Config: brand.config.json (id, displayName, vendor, firefoxChannel, firefoxLang)
+# Download official Firefox → deep-brand (omni.ja) → Type-2 AppImage
+# Usage: ./scripts/make-appimage.sh [output-dir]
 
 set -euo pipefail
 
@@ -15,22 +12,13 @@ WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
 CONFIG="$ROOT/brand.config.json"
-if [[ ! -f "$CONFIG" ]]; then
-  echo "Missing $CONFIG" >&2
-  exit 1
-fi
+[[ -f "$CONFIG" ]] || { echo "Missing $CONFIG" >&2; exit 1; }
 
-# Minimal JSON read without jq dependency for core fields
 read_json() {
-  local key="$1"
-  python3 - "$CONFIG" "$key" <<'PY'
+  python3 - "$CONFIG" "$1" <<'PY'
 import json, sys
 cfg = json.load(open(sys.argv[1], encoding="utf-8"))
-key = sys.argv[2]
-val = cfg.get(key, "")
-if val is None:
-    val = ""
-print(val)
+print(cfg.get(sys.argv[2], "") or "")
 PY
 }
 
@@ -55,22 +43,18 @@ ARCH="$(uname -m)"
 case "$ARCH" in
   x86_64) MOZ_OS="linux64" ;;
   aarch64|arm64) MOZ_OS="linux64-aarch64"; ARCH="aarch64" ;;
-  *)
-    echo "Unsupported arch: $ARCH" >&2
-    exit 1
-    ;;
+  *) echo "Unsupported arch: $ARCH" >&2; exit 1 ;;
 esac
 
-mkdir -p "$OUTPUT_DIR"
-cd "$WORKDIR"
-
-# product=firefox-latest-ssl | firefox-beta-latest-ssl | firefox-nightly-latest-ssl
 case "$FIREFOX_CHANNEL" in
   latest|release|"") PRODUCT="firefox-latest-ssl" ;;
   beta) PRODUCT="firefox-beta-latest-ssl" ;;
   nightly) PRODUCT="firefox-nightly-latest-ssl" ;;
   *) PRODUCT="firefox-latest-ssl" ;;
 esac
+
+mkdir -p "$OUTPUT_DIR"
+cd "$WORKDIR"
 
 DOWNLOAD_URL="https://download.mozilla.org/?product=${PRODUCT}&os=${MOZ_OS}&lang=${FIREFOX_LANG}"
 echo "[brand] ${BRAND_DISPLAY_NAME} (${BRAND_ID})"
@@ -80,58 +64,36 @@ curl -fL --retry 3 -o firefox.tar.xz "$DOWNLOAD_URL"
 echo "[firefox] Extracting"
 tar -xf firefox.tar.xz
 rm -f firefox.tar.xz
-
-if [[ ! -d firefox ]]; then
-  echo "Expected top-level firefox/ directory in archive" >&2
-  ls -la >&2
-  exit 1
-fi
+[[ -d firefox ]] || { echo "Expected firefox/ in archive" >&2; exit 1; }
 
 mv firefox AppDir
+
+echo "[brand] Patching omni.ja / icons / binary name"
+python3 "$ROOT/scripts/patch_firefox_brand.py" AppDir \
+  --id "$BRAND_ID" \
+  --display-name "$BRAND_DISPLAY_NAME" \
+  --vendor "$BRAND_VENDOR" \
+  --icons "$ROOT/icons"
+
 cd AppDir
 
-# Version from application.ini
 VERSION="unknown"
 if [[ -f application.ini ]]; then
   VERSION="$(awk -F= '/^Version=/{print $2; exit}' application.ini | tr -d '\r')"
-  # Patch display identity (加法: 名称)
-  sed -i \
-    -e "s/^Name=.*/Name=${BRAND_DISPLAY_NAME}/" \
-    -e "s/^RemotingName=.*/RemotingName=${BRAND_ID}/" \
-    -e "s/^Vendor=.*/Vendor=${BRAND_VENDOR}/" \
-    application.ini || true
-  # Some builds use [App] Name=Firefox only
-  if ! grep -q "^Name=" application.ini; then
-    echo "Name=${BRAND_DISPLAY_NAME}" >> application.ini
-  fi
 fi
 VERSION="${VERSION:-dev}"
 
-# Overlay icons if provided
-ICONS_DIR="$ROOT/icons"
-overlay_icon() {
-  local src="$1" dest="$2"
-  if [[ -f "$src" ]]; then
-    mkdir -p "$(dirname "$dest")"
-    cp -f "$src" "$dest"
-    echo "[icon] $src → $dest"
-  fi
-}
-
-if [[ -d "$ICONS_DIR" ]]; then
-  for size in 16 32 48 64 128; do
-    overlay_icon \
-      "$ICONS_DIR/default${size}.png" \
-      "./browser/chrome/icons/default/default${size}.png"
-  done
-  overlay_icon "$ICONS_DIR/about-logo.png" "./browser/chrome/icons/default/about-logo.png"
-  overlay_icon "$ICONS_DIR/about-logo@2x.png" "./browser/chrome/icons/default/about-logo@2x.png"
+BINARY_NAME="$BRAND_ID"
+if [[ ! -x "./${BINARY_NAME}" ]]; then
+  echo "Branded binary missing: ${BINARY_NAME}" >&2
+  ls -la >&2
+  exit 1
 fi
 
 # AppImage icon
 ICON_SRC=""
 for candidate in \
-  "$ICONS_DIR/default128.png" \
+  "$ROOT/icons/default128.png" \
   ./browser/chrome/icons/default/default128.png \
   ./browser/chrome/icons/default/default64.png; do
   if [[ -f "$candidate" ]]; then
@@ -139,32 +101,12 @@ for candidate in \
     break
   fi
 done
-
 if [[ -n "$ICON_SRC" ]]; then
   cp -f "$ICON_SRC" "./${BRAND_ID}.png"
   cp -f "$ICON_SRC" ./.DirIcon
 else
-  echo "[icon] Warning: no icon found; AppImage will have a placeholder" >&2
-  # 1x1 PNG
   printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > "./${BRAND_ID}.png"
   cp -f "./${BRAND_ID}.png" ./.DirIcon
-fi
-
-# Rename binary for process list / Exec
-if [[ -x ./firefox ]]; then
-  mv ./firefox "./${BRAND_ID}"
-  ln -sf "$BRAND_ID" ./firefox
-fi
-if [[ -x ./firefox-bin ]]; then
-  mv ./firefox-bin "./${BRAND_ID}-bin"
-  ln -sf "${BRAND_ID}-bin" ./firefox-bin
-fi
-
-BINARY_NAME="$BRAND_ID"
-if [[ ! -x "./${BINARY_NAME}" ]]; then
-  echo "Binary not found after rename" >&2
-  ls -la >&2
-  exit 1
 fi
 
 cat > "./${BRAND_ID}.desktop" <<EOF
@@ -189,25 +131,10 @@ CURRENTDIR="\$(dirname "\$(readlink -f "\$0")")"
 export PATH="\${CURRENTDIR}:\${PATH}"
 export MOZ_LEGACY_PROFILES=1
 export MOZ_APP_LAUNCHER="\${APPIMAGE}"
+# Avoid leftover profile from stock Firefox name when possible
 exec "\${CURRENTDIR}/${BINARY_NAME}" "\$@"
 EOF
 chmod +x ./AppRun
-
-# Portable: disable in-app updater (加法: 策略)
-mkdir -p ./distribution
-cat > ./distribution/policies.json <<'EOF'
-{
-  "policies": {
-    "DisableAppUpdate": true,
-    "AppAutoUpdate": false,
-    "BackgroundAppUpdate": false
-  }
-}
-EOF
-
-# Profile directory hint via env in wrapper (optional)
-# MOZ_APP_PROFILE is compile-time; for portable use, AppImage portable home works via
-# sibling "${APPIMAGE}.home" — documented in README.
 
 cd "$WORKDIR"
 
@@ -224,7 +151,6 @@ VERSION="$VERSION" ARCH="$ARCH" \
 mv "./${APPIMAGE_NAME}" "$OUTPUT_DIR/"
 [[ -f "./${APPIMAGE_NAME}.zsync" ]] && mv "./${APPIMAGE_NAME}.zsync" "$OUTPUT_DIR/" || true
 
-# Write resolved brand for CI artifacts
 cat > "$OUTPUT_DIR/brand.env" <<EOF
 BRAND_ID=${BRAND_ID}
 BRAND_DISPLAY_NAME=${BRAND_DISPLAY_NAME}
@@ -233,4 +159,5 @@ FIREFOX_VERSION=${VERSION}
 EOF
 
 echo "[done] ${OUTPUT_DIR}/${APPIMAGE_NAME}"
-echo "[done] Type-2 AppImage: ./${APPIMAGE_NAME} --appimage-extract"
+echo "[hint] 旧配置/欢迎页可能仍缓存「Firefox」文案：请删配置目录后重开，或用便携目录："
+echo "       mkdir -p ${APPIMAGE_NAME}.home && APPIMAGE_EXTRACT_AND_RUN=1 ./${APPIMAGE_NAME}"
