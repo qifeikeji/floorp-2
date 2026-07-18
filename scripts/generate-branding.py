@@ -84,12 +84,14 @@ def generate(cfg: dict, icons_dir: Path, out_dir: Path) -> Path:
         shutil.rmtree(brand_root)
     brand_root.mkdir(parents=True)
 
-    # configure.sh — read by Gecko branding machinery
+    # configure.sh — only options allowed from branding confvars (modern Gecko).
+    # MOZ_APP_VENDOR / MOZ_APP_PROFILE are "implied" and must NOT be set here
+    # (InvalidOptionError: ... can not be set by confvars).
+    # Vendor/display strings for UI come from brand.ftl / brand.properties.
     (brand_root / "configure.sh").write_text(
         f"""# Generated from brand.config.json — compile-time identity (like Floorp)
+# Official Firefox branding only sets MOZ_APP_DISPLAYNAME here.
 MOZ_APP_DISPLAYNAME="{display}"
-MOZ_APP_VENDOR={vendor}
-MOZ_APP_PROFILE={profile}
 """,
         encoding="utf-8",
     )
