@@ -1,5 +1,6 @@
 dist/
 work/
+generated/
 *.AppImage
 *.AppImage.zsync
 .brand.env

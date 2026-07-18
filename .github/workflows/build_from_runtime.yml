@@ -1,0 +1,151 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# Floorp-style: clone Floorp-Runtime (Gecko), inject MOZ_APP_NAME branding,
+# FULL compile (not official Firefox tarball), then AppImage.
+#
+# Expect 3–6+ hours on GitHub-hosted runners. Needs large free disk.
+
+name: Build from Runtime (MOZ_APP_NAME)
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_repository:
+        description: "Gecko/Runtime repo (owner/name); empty = brand.config.json"
+        type: string
+        default: ""
+      runtime_ref:
+        description: "Git ref; empty = brand.config.json or repo default branch"
+        type: string
+        default: ""
+
+concurrency:
+  group: runtime-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 390
+    steps:
+      - name: Free disk space
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h
+
+      - uses: actions/checkout@v5
+        with:
+          path: floorp-2
+
+      - name: Resolve Runtime source
+        id: runtime
+        working-directory: floorp-2
+        run: |
+          set -euo pipefail
+          REPO="${{ inputs.runtime_repository }}"
+          REF="${{ inputs.runtime_ref }}"
+          if [[ -z "$REPO" ]]; then
+            REPO="$(python3 -c "import json;print(json.load(open('brand.config.json')).get('runtimeRepository') or 'Floorp-Projects/Floorp-Runtime')")"
+          fi
+          if [[ -z "$REF" ]]; then
+            REF="$(python3 -c "import json;print(json.load(open('brand.config.json')).get('runtimeRef') or '')")"
+          fi
+          echo "repository=$REPO" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Using Runtime $REPO@${REF:-<default>}"
+
+      - name: Checkout Runtime (default branch)
+        if: ${{ steps.runtime.outputs.ref == '' }}
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.runtime.outputs.repository }}
+          path: runtime
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Checkout Runtime (pinned ref)
+        if: ${{ steps.runtime.outputs.ref != '' }}
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.runtime.outputs.repository }}
+          ref: ${{ steps.runtime.outputs.ref }}
+          path: runtime
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl wget python3 python3-pip python3-dev \
+            build-essential libasound2-dev libcurl4-openssl-dev libdbus-1-dev \
+            libdbus-glib-1-dev libdrm-dev libgtk-3-dev libpulse-dev \
+            libx11-xcb-dev libxt-dev nasm nodejs unzip zip \
+            squashfs-tools desktop-file-utils \
+            libgconf2-dev libncurses-dev xvfb
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Prepare branding (MOZ_APP_NAME)
+        run: |
+          set -euo pipefail
+          chmod +x floorp-2/scripts/*.sh floorp-2/scripts/*.py
+          ./floorp-2/scripts/prepare-runtime.sh "$GITHUB_WORKSPACE/runtime"
+          ID="$(python3 -c "import json;print(json.load(open('floorp-2/brand.config.json'))['id'])")"
+          echo "BRAND_ID=$ID" >> "$GITHUB_ENV"
+          echo "MOZCONFIG=$GITHUB_WORKSPACE/runtime/mozconfig.${ID}" >> "$GITHUB_ENV"
+
+      - name: Mach bootstrap
+        working-directory: runtime
+        run: |
+          set -euo pipefail
+          export MOZCONFIG
+          ./mach --no-interactive bootstrap --application-choice browser
+
+      - name: Mach configure
+        working-directory: runtime
+        run: |
+          set -euo pipefail
+          export MOZCONFIG
+          ./mach configure
+          grep -E 'MOZ_APP_NAME|MOZ_APP_DISPLAYNAME|branding|with-app-name' "$MOZCONFIG" || true
+
+      - name: Mach build
+        working-directory: runtime
+        run: |
+          set -euo pipefail
+          export MOZCONFIG
+          ./mach build -j"$(nproc)"
+
+      - name: Mach package
+        working-directory: runtime
+        run: |
+          set -euo pipefail
+          export MOZCONFIG
+          ./mach package
+
+      - name: Build AppImage
+        run: |
+          set -euo pipefail
+          DIST="$GITHUB_WORKSPACE/runtime/obj-${BRAND_ID}/dist"
+          if [[ ! -d "$DIST" ]]; then
+            DIST="$(find "$GITHUB_WORKSPACE/runtime" -maxdepth 2 -type d -name dist | head -1)"
+          fi
+          echo "Using DIST=$DIST"
+          ls -la "$DIST" || true
+          ./floorp-2/scripts/make-appimage-from-dist.sh "$DIST" "$HOME/dist"
+          ls -lah "$HOME/dist"
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64-AppImage-runtime
+          path: ~/dist/*.AppImage
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

@@ -1,17 +1,14 @@
 # SPDX-License-Identifier: MPL-2.0
 #
-# Download official Firefox → apply brand.config.json + icons → Type-2 AppImage
+# Quick path: download official Mozilla Firefox tarball and wrap as AppImage.
+# Wayland app_id stays "firefox" — GNOME panel will still say Mozilla Firefox
+# unless you run scripts/install-desktop.sh. Prefer build_from_runtime.yml
+# for real MOZ_APP_NAME / Floorp-style identity.
 
-name: Build Linux AppImage
+name: Build AppImage (upstream Firefox, quick)
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "brand.config.json"
-      - "icons/**"
-      - "scripts/**"
-      - ".github/workflows/build_appimage.yml"
 
 jobs:
   build:
@@ -33,8 +30,8 @@ jobs:
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: linux-x86_64-AppImage
+          name: linux-x86_64-AppImage-upstream
           path: ~/dist/*.AppImage
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
           compression-level: 0

@@ -2,6 +2,7 @@
   "id": "xingchen",
   "displayName": "星辰浏览器",
   "vendor": "Xingchen",
-  "firefoxChannel": "latest",
-  "firefoxLang": "zh-CN"
+  "profileDir": "Xingchen",
+  "runtimeRepository": "Floorp-Projects/Floorp-Runtime",
+  "runtimeRef": ""
 }

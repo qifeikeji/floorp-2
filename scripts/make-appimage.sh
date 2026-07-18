@@ -114,22 +114,24 @@ else
   cp -f "./${BRAND_ID}.png" ./.DirIcon
 fi
 
+# Desktop for AppImage tools + for optional install into ~/.local/share/applications
 cat > "./${BRAND_ID}.desktop" <<EOF
 [Desktop Entry]
 Version=1.0
+Type=Application
 Name=${BRAND_DISPLAY_NAME}
 GenericName=Web Browser
 Comment=${BRAND_DISPLAY_NAME}
 Exec=${BINARY_NAME} %u
 Icon=${BRAND_ID}
 Terminal=false
-Type=Application
-MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/vnd.mozilla.xul+xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;
 StartupNotify=true
 Categories=Network;WebBrowser;
-# Must match GTK WM_CLASS set via --class below (otherwise GNOME picks system Firefox)
+MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/vnd.mozilla.xul+xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;
+# Must match --class / WM_CLASS (GNOME matches this to pick icon+title)
 StartupWMClass=${BRAND_ID}
 EOF
+cp -f "./${BRAND_ID}.desktop" ./firefox.desktop 2>/dev/null || true
 
 cat > ./AppRun <<EOF
 #!/bin/sh
@@ -137,8 +139,19 @@ CURRENTDIR="\$(dirname "\$(readlink -f "\$0")")"
 export PATH="\${CURRENTDIR}:\${PATH}"
 export MOZ_LEGACY_PROFILES=1
 export MOZ_APP_LAUNCHER="\${APPIMAGE}"
-# So GNOME/KDE match our .desktop instead of /usr/share/applications/firefox.desktop
 export MOZ_APP_REMOTINGNAME="${BRAND_ID}"
+
+# Default: stay on Wayland when the session is Wayland.
+# GNOME panel title/icon: run scripts/install-desktop.sh once so
+# ~/.local/share/applications/firefox.desktop overrides the system Firefox entry
+# (official builds still report Wayland app_id "firefox").
+#
+# Optional force X11: XINGCHEN_FORCE_X11=1
+if [ "\${XINGCHEN_FORCE_X11:-}" = "1" ]; then
+  export MOZ_ENABLE_WAYLAND=0
+  export GDK_BACKEND=x11
+fi
+
 exec "\${CURRENTDIR}/${BINARY_NAME}" \\
   --name "${BRAND_ID}" \\
   --class "${BRAND_ID}" \\
