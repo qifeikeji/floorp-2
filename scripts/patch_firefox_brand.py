@@ -290,22 +290,36 @@ def patch_appdir(
             print(f"[patch] Processing {omni}")
             repack_omni(omni, display_name, vendor, icons_dir)
 
-    dist = appdir / "distribution"
-    dist.mkdir(parents=True, exist_ok=True)
-    (dist / "policies.json").write_text(
-        """{
-  "policies": {
-    "DisableAppUpdate": true,
-    "AppAutoUpdate": false,
-    "BackgroundAppUpdate": false,
-    "OverrideFirstRunPage": "",
-    "OverridePostUpdatePage": "",
-    "DontCheckDefaultBrowser": true
-  }
-}
+    # Prefer autoconfig prefs over policies.json.
+    # policies.json triggers the "managed by your organization" banner — not a
+    # remote org, just Firefox enterprise-policy UI. Floorp often shows the same.
+    pref_dir = appdir / "defaults" / "pref"
+    pref_dir.mkdir(parents=True, exist_ok=True)
+    # Load unlocked autoconfig (obscure_value 0 = plain text cfg next to binary)
+    (pref_dir / "autoconfig.js").write_text(
+        f"""// Autoconfig bootstrap for {display_name}
+pref("general.config.filename", "{brand_id}.cfg");
+pref("general.config.obscure_value", 0);
+pref("general.config.sandbox_enabled", false);
 """,
         encoding="utf-8",
     )
+    # CFG must start with a comment line (Mozilla requirement)
+    (appdir / f"{brand_id}.cfg").write_text(
+        f"""// {display_name} local prefs (not enterprise policy)
+lockPref("app.update.enabled", false);
+lockPref("app.update.auto", false);
+lockPref("app.update.background.enabled", false);
+lockPref("browser.shell.checkDefaultBrowser", false);
+defaultPref("browser.startup.homepage_override.mstone", "ignore");
+""",
+        encoding="utf-8",
+    )
+
+    # Remove policies.json if a previous build left one (avoids org banner)
+    policies = appdir / "distribution" / "policies.json"
+    if policies.is_file():
+        policies.unlink()
 
     firefox_bin = appdir / "firefox"
     target = appdir / brand_id

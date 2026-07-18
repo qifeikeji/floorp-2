@@ -127,6 +127,7 @@ Type=Application
 MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/vnd.mozilla.xul+xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;
 StartupNotify=true
 Categories=Network;WebBrowser;
+# Must match GTK WM_CLASS set via --class below (otherwise GNOME picks system Firefox)
 StartupWMClass=${BRAND_ID}
 EOF
 
@@ -136,8 +137,12 @@ CURRENTDIR="\$(dirname "\$(readlink -f "\$0")")"
 export PATH="\${CURRENTDIR}:\${PATH}"
 export MOZ_LEGACY_PROFILES=1
 export MOZ_APP_LAUNCHER="\${APPIMAGE}"
-# Avoid leftover profile from stock Firefox name when possible
-exec "\${CURRENTDIR}/${BINARY_NAME}" "\$@"
+# So GNOME/KDE match our .desktop instead of /usr/share/applications/firefox.desktop
+export MOZ_APP_REMOTINGNAME="${BRAND_ID}"
+exec "\${CURRENTDIR}/${BINARY_NAME}" \\
+  --name "${BRAND_ID}" \\
+  --class "${BRAND_ID}" \\
+  "\$@"
 EOF
 chmod +x ./AppRun
 
