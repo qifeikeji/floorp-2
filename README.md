@@ -47,7 +47,9 @@ GitHub Actions → **Build from Runtime (MOZ_APP_NAME)**
 - 会 clone Floorp-Runtime、注入品牌、**完整 `mach build`**（约数小时）、再打 AppImage  
 - Artifact：`linux-x86_64-AppImage-runtime`
 
-标准 `ubuntu-22.04` 可能磁盘/超时紧张；失败时需更大 runner 或本地编 Runtime。
+标准 `ubuntu-22.04` 磁盘/内存紧张：workflow 已加 16G swap 并把 `mach build` 并行度压到 2–3。  
+若仍出现 **exit 143**（被 SIGTERM 杀掉），多半是 OOM/磁盘/超时或重复触发把旧任务 cancel 掉——换更大 runner 或本地编 Runtime。  
+`swgl … -fembed-bitcode=all` 一类是常见警告，可忽略。
 
 ## 本地（有磁盘与时间时）
 
