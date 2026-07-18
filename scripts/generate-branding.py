@@ -60,8 +60,7 @@ def write_brand_ftl(display: str, vendor: str) -> str:
 -brand-full-name = {display}
 -brand-product-name = {display}
 -vendor-short-name = {vendor}
--trademark-info =
-    {display} and related marks are trademarks of {vendor}.
+trademarkInfo = {{ " " }}
 """
 
 
@@ -70,6 +69,66 @@ def write_brand_properties(display: str, vendor: str) -> str:
 brandShortName={display}
 brandFullName={display}
 vendorShortName={vendor}
+"""
+
+
+def write_wordmark_svg(display: str) -> str:
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="240" height="48" viewBox="0 0 240 48">
+  <text x="0" y="36" font-family="sans-serif" font-size="32" fill="#111">{display}</text>
+</svg>
+"""
+
+
+def write_logo_svg(display: str) -> str:
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="24" fill="#1a73e8"/>
+  <text x="64" y="76" text-anchor="middle" font-family="sans-serif" font-size="36" fill="#fff">{display[:1]}</text>
+</svg>
+"""
+
+
+def write_pdf_svg() -> str:
+    return """<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="4" fill="#d93025"/>
+  <text x="16" y="21" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fff">PDF</text>
+</svg>
+"""
+
+
+def write_firefox_branding_js() -> str:
+    # Required by FirefoxBranding() via JS_PREFERENCE_FILES.
+    return """/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Branding-specific prefs (updater disabled in mozconfig).
+pref("startup.homepage_override_url", "");
+pref("startup.homepage_welcome_url", "");
+pref("startup.homepage_welcome_url.additional", "");
+pref("app.update.interval", 86400);
+pref("app.update.promptWaitTime", 86400);
+pref("app.update.url.manual", "");
+pref("app.update.url.details", "");
+pref("app.update.checkInstallTime.days", 2);
+pref("app.update.badgeWaitTime", 0);
+pref("devtools.selfxss.count", 5);
+"""
+
+
+def write_about_dialog_css() -> str:
+    return """/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#rightBox {
+  background-size: auto 44px;
+  margin-inline: 30px;
+  padding-top: 64px;
+}
+
+#bottomBox {
+  padding: 15px 10px;
+}
 """
 
 
@@ -85,12 +144,9 @@ def generate(cfg: dict, icons_dir: Path, out_dir: Path) -> Path:
     brand_root.mkdir(parents=True)
 
     # configure.sh — only options allowed from branding confvars (modern Gecko).
-    # MOZ_APP_VENDOR / MOZ_APP_PROFILE are "implied" and must NOT be set here
-    # (InvalidOptionError: ... can not be set by confvars).
-    # Vendor/display strings for UI come from brand.ftl / brand.properties.
+    # MOZ_APP_VENDOR / MOZ_APP_PROFILE are "implied" and must NOT be set here.
     (brand_root / "configure.sh").write_text(
         f"""# Generated from brand.config.json — compile-time identity (like Floorp)
-# Official Firefox branding only sets MOZ_APP_DISPLAYNAME here.
 MOZ_APP_DISPLAYNAME="{display}"
 """,
         encoding="utf-8",
@@ -114,6 +170,13 @@ FirefoxBranding()
         encoding="utf-8",
     )
 
+    # Required by FirefoxBranding()
+    pref = brand_root / "pref"
+    pref.mkdir()
+    (pref / "firefox-branding.js").write_text(
+        write_firefox_branding_js(), encoding="utf-8"
+    )
+
     content = brand_root / "content"
     content.mkdir()
     (content / "moz.build").write_text(
@@ -124,27 +187,39 @@ JAR_MANIFESTS += ["jar.mn"]
 """,
         encoding="utf-8",
     )
+    # Match mozilla-firefox unofficial branding content/jar.mn shape
     (content / "jar.mn").write_text(
-        """#filter substitution
-browser.jar:
+        """browser.jar:
 % content branding %content/branding/ contentaccessible=yes
-  content/branding/about-logo.png                 (about-logo.png)
-  content/branding/about-logo@2x.png              (about-logo@2x.png)
-  content/branding/about-wordmark.svg            (about-wordmark.svg)
-  content/branding/document.ico                  (document.ico)
-  content/branding/document.png                  (document.png)
+  content/branding/about.png                        (about.png)
+  content/branding/about-logo.png                   (about-logo.png)
+  content/branding/about-logo.svg                   (about-logo.svg)
+  content/branding/about-logo@2x.png                (about-logo@2x.png)
+  content/branding/about-wordmark.svg               (about-wordmark.svg)
+  content/branding/about-logo-private.png           (about-logo-private.png)
+  content/branding/about-logo-private@2x.png        (about-logo-private@2x.png)
+  content/branding/document.ico                     (../document.ico)
+  content/branding/document_pdf.svg                 (document_pdf.svg)
+  content/branding/firefox-wordmark.svg             (firefox-wordmark.svg)
+  content/branding/icon16.png                       (../default16.png)
+  content/branding/icon32.png                       (../default32.png)
+  content/branding/icon48.png                       (../default48.png)
+  content/branding/icon64.png                       (../default64.png)
+  content/branding/icon128.png                      (../default128.png)
+  content/branding/aboutDialog.css                  (aboutDialog.css)
 """,
         encoding="utf-8",
     )
 
-    # Wordmark placeholder SVG
     (content / "about-wordmark.svg").write_text(
-        f"""<svg xmlns="http://www.w3.org/2000/svg" width="240" height="48" viewBox="0 0 240 48">
-  <text x="0" y="36" font-family="sans-serif" font-size="32" fill="#111">{display}</text>
-</svg>
-""",
-        encoding="utf-8",
+        write_wordmark_svg(display), encoding="utf-8"
     )
+    (content / "firefox-wordmark.svg").write_text(
+        write_wordmark_svg(display), encoding="utf-8"
+    )
+    (content / "about-logo.svg").write_text(write_logo_svg(display), encoding="utf-8")
+    (content / "document_pdf.svg").write_text(write_pdf_svg(), encoding="utf-8")
+    (content / "aboutDialog.css").write_text(write_about_dialog_css(), encoding="utf-8")
 
     locales = brand_root / "locales"
     locales.mkdir()
@@ -159,45 +234,37 @@ JAR_MANIFESTS += ["jar.mn"]
     (locales / "jar.mn").write_text(
         """#filter substitution
 [localization] @AB_CD@.jar:
-  branding                                          (%branding/**/*.ftl)
+  branding (en-US/**/*.ftl)
 
 @AB_CD@.jar:
 % locale branding @AB_CD@ %locale/branding/
-  locale/branding/brand.properties                 (%brand.properties)
+  locale/branding/brand.properties (en-US/brand.properties)
 """,
         encoding="utf-8",
     )
 
-    for loc in ("en-US", "zh-CN", "ja-JP"):
-        loc_dir = locales / loc
-        loc_dir.mkdir()
-        branding_loc = loc_dir / "branding"
-        branding_loc.mkdir()
-        (branding_loc / "brand.ftl").write_text(
-            write_brand_ftl(display, vendor), encoding="utf-8"
-        )
-        (loc_dir / "brand.properties").write_text(
-            write_brand_properties(display, vendor), encoding="utf-8"
-        )
-        # also flat brand.ftl some trees expect
-        (loc_dir / "brand.ftl").write_text(
-            write_brand_ftl(display, vendor), encoding="utf-8"
-        )
+    en_us = locales / "en-US"
+    en_us.mkdir()
+    (en_us / "brand.ftl").write_text(write_brand_ftl(display, vendor), encoding="utf-8")
+    (en_us / "brand.properties").write_text(
+        write_brand_properties(display, vendor), encoding="utf-8"
+    )
 
-    # Icons at branding root (FirefoxBranding picks these up)
+    # Icons at branding root (FirefoxBranding / gtk FINAL_TARGET_FILES)
     for size in (16, 22, 24, 32, 48, 64, 128, 256):
         copy_icon(icons_dir, f"default{size}.png", brand_root / f"default{size}.png")
     copy_icon(icons_dir, "about-logo.png", brand_root / "about-logo.png")
     copy_icon(icons_dir, "about-logo@2x.png", brand_root / "about-logo@2x.png")
+    copy_icon(icons_dir, "about-logo.png", content / "about.png")
     copy_icon(icons_dir, "about-logo.png", content / "about-logo.png")
     copy_icon(icons_dir, "about-logo@2x.png", content / "about-logo@2x.png")
-    copy_icon(icons_dir, "default128.png", content / "document.png")
-    copy_icon(icons_dir, "default32.png", content / "document.ico")
-    # Windows ico placeholder = copy png (Runtime linux build ignores)
+    copy_icon(icons_dir, "about-logo.png", content / "about-logo-private.png")
+    copy_icon(icons_dir, "about-logo@2x.png", content / "about-logo-private@2x.png")
+    # document.ico at branding root (jar.mn references ../document.ico)
+    shutil.copy2(brand_root / "default32.png", brand_root / "document.ico")
     shutil.copy2(brand_root / "default128.png", brand_root / "firefox.ico")
     shutil.copy2(brand_root / "default64.png", brand_root / "Document.ico")
 
-    # Export for mozconfig helpers
     meta = brand_root / "BRAND_META.json"
     meta.write_text(
         json.dumps(
