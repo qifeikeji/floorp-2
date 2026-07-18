@@ -68,7 +68,12 @@ rm -f firefox.tar.xz
 
 mv firefox AppDir
 
-echo "[brand] Patching omni.ja / icons / binary name"
+echo "[brand] Patching omni.ja / icons / binary name (via unzip/zip)"
+# Ensure zip tools exist (CI installs them; local may need apt/pacman)
+command -v unzip >/dev/null && command -v zip >/dev/null || {
+  echo "Need unzip+zip. e.g. sudo apt-get install -y unzip zip" >&2
+  exit 1
+}
 python3 "$ROOT/scripts/patch_firefox_brand.py" AppDir \
   --id "$BRAND_ID" \
   --display-name "$BRAND_DISPLAY_NAME" \

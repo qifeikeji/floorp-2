@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MPL-2.0
-"""Patch official Firefox AppDir: brand.ftl, branding images, hardcoded Firefox UI strings."""
+"""Patch official Firefox AppDir: brand.ftl, branding images, Firefox UI strings.
+
+Mozilla omni.ja is a quirky ZIP that Python zipfile often cannot open
+(Bad magic number for central directory). Use system unzip/zip instead.
+"""
 
 from __future__ import annotations
 
 import argparse
-import io
-import os
 import re
 import shutil
+import subprocess
 import tempfile
-import zipfile
 from pathlib import Path
 
 
@@ -38,24 +40,7 @@ vendorShortName={vendor}
 """
 
 
-# Paths inside browser/omni.ja that commonly hold chrome branding art
-BRANDING_PNG_CANDIDATES = [
-    "chrome/browser/content/branding/about-logo.png",
-    "chrome/browser/content/branding/about-logo@2x.png",
-    "chrome/browser/content/branding/icon128.png",
-    "chrome/browser/content/branding/icon64.png",
-    "chrome/browser/content/branding/icon32.png",
-    "chrome/branding/content/about-logo.png",
-    "chrome/branding/content/about-logo@2x.png",
-    "chrome/branding/content/icon128.png",
-    "chrome/branding/content/icon64.png",
-    "chrome/branding/content/icon32.png",
-]
-
-
 def patch_text_firefox(content: str, display_name: str) -> str:
-    """Replace visible Firefox product strings; keep technical URLs/ids when possible."""
-    # Order matters: longer phrases first
     replacements = [
         ("Mozilla Firefox Official Build", f"{display_name} Build"),
         ("欢迎使用 Firefox", f"欢迎使用 {display_name}"),
@@ -73,145 +58,211 @@ def patch_text_firefox(content: str, display_name: str) -> str:
     return out
 
 
-def should_patch_text_member(name: str) -> bool:
-    lower = name.lower()
-    if not (
-        lower.endswith(".ftl")
-        or lower.endswith(".properties")
-        or lower.endswith(".dtd")
-        or lower.endswith(".xhtml")
-        or lower.endswith(".html")
-        or lower.endswith(".js")
+def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        cmd,
+        check=True,
+        text=True,
+        capture_output=True,
+        **kwargs,
+    )
+
+
+def ensure_tools() -> None:
+    for tool in ("unzip", "zip"):
+        if shutil.which(tool) is None:
+            raise SystemExit(
+                f"Missing required tool: {tool}. Install with: sudo apt-get install -y unzip zip"
+            )
+
+
+def fix_omni_zip(omni_path: Path) -> Path:
+    """Return a path to a ZIP that unzip can read (may be a fixed copy)."""
+    # Quick test
+    test = subprocess.run(
+        ["unzip", "-tqq", str(omni_path)],
+        capture_output=True,
+        text=True,
+    )
+    if test.returncode == 0:
+        return omni_path
+
+    print(f"[patch] {omni_path} failed unzip -t; trying zip -FF repair")
+    fixed = omni_path.with_suffix(".ja.fixed")
+    if fixed.exists():
+        fixed.unlink()
+    # zip -FF writes repaired archive; may prompt — feed newlines
+    proc = subprocess.run(
+        ["zip", "-FF", str(omni_path), "--out", str(fixed)],
+        input="\n\n\n\n",
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0 or not fixed.is_file():
+        raise RuntimeError(
+            f"Cannot open or repair {omni_path}:\n"
+            f"unzip: {test.stderr or test.stdout}\n"
+            f"zip -FF: {proc.stderr or proc.stdout}"
+        )
+    test2 = subprocess.run(
+        ["unzip", "-tqq", str(fixed)],
+        capture_output=True,
+        text=True,
+    )
+    if test2.returncode != 0:
+        raise RuntimeError(f"Repaired archive still invalid: {fixed}")
+    return fixed
+
+
+def list_omni_members(omni_path: Path) -> list[str]:
+    out = run(["unzip", "-Z1", str(omni_path)])
+    return [line for line in out.stdout.splitlines() if line and not line.endswith("/")]
+
+
+def should_patch_text_file(path: Path) -> bool:
+    name = path.name.lower()
+    rel = str(path).replace("\\", "/").lower()
+    if not name.endswith(
+        (".ftl", ".properties", ".dtd", ".xhtml", ".html", ".js")
     ):
         return False
-    # Avoid breaking protocol handlers / extension ids aggressively in large JS
-    if lower.endswith(".js") and "brand" not in lower and "about" not in lower:
+    if name.endswith(".js") and "brand" not in rel and "about" not in rel:
         return False
-    return True
+    return (
+        "/locale/" in rel
+        or "/localization/" in rel
+        or "branding" in rel
+        or "about" in name
+        or name.endswith((".ftl", ".properties"))
+    )
+
+
+def pick_icon(icons_dir: Path, *names: str) -> Path | None:
+    for n in names:
+        p = icons_dir / n
+        if p.is_file():
+            return p
+    return None
+
+
+def patch_extracted_tree(
+    root: Path,
+    display_name: str,
+    vendor: str,
+    icons_dir: Path,
+) -> tuple[int, int, int]:
+    brand_ftl = write_brand_ftl(display_name, vendor)
+    brand_props = write_brand_properties(display_name, vendor)
+    n_brand = n_text = n_icons = 0
+
+    about = pick_icon(icons_dir, "about-logo.png", "default128.png")
+    about2 = pick_icon(icons_dir, "about-logo@2x.png") or about
+    icon128 = pick_icon(icons_dir, "default128.png") or about
+    icon64 = pick_icon(icons_dir, "default64.png") or icon128
+    icon32 = pick_icon(icons_dir, "default32.png", "default16.png") or icon64
+
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
+        low = rel.lower()
+        name = path.name
+
+        if name == "brand.ftl":
+            path.write_text(brand_ftl, encoding="utf-8")
+            n_brand += 1
+            continue
+        if name == "brand.properties":
+            path.write_text(brand_props, encoding="utf-8")
+            n_brand += 1
+            continue
+
+        if low.endswith(".png") and (
+            "branding" in low or "/icons/default/" in low
+        ):
+            src: Path | None = None
+            if "about-logo@2x" in low:
+                src = about2
+            elif "about-logo" in low:
+                src = about
+            elif "128" in low or "default128" in low:
+                src = icon128
+            elif "64" in low or "default64" in low:
+                src = icon64
+            elif "32" in low or "16" in low or "default32" in low or "default16" in low:
+                src = icon32
+            else:
+                src = about or icon128
+            if src and src.is_file():
+                shutil.copy2(src, path)
+                n_icons += 1
+            continue
+
+        if should_patch_text_file(path):
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if "Firefox" not in text and "firefox" not in text:
+                continue
+            new_text = patch_text_firefox(text, display_name)
+            if new_text != text:
+                path.write_text(new_text, encoding="utf-8")
+                n_text += 1
+
+    return n_brand, n_text, n_icons
 
 
 def repack_omni(
     omni_path: Path,
     display_name: str,
     vendor: str,
-    icon_map: dict[str, Path],
+    icons_dir: Path,
 ) -> None:
-    """Mozilla requires omni.ja entries stored (no compression)."""
-    brand_ftl = write_brand_ftl(display_name, vendor)
-    brand_props = write_brand_properties(display_name, vendor)
+    ensure_tools()
+    readable = fix_omni_zip(omni_path)
 
-    tmp_fd, tmp_name = tempfile.mkstemp(suffix=".ja")
-    os.close(tmp_fd)
-    tmp_path = Path(tmp_name)
+    with tempfile.TemporaryDirectory(prefix="omni-patch-") as tmp:
+        extract_dir = Path(tmp) / "out"
+        extract_dir.mkdir()
+        # -q quiet, -o overwrite
+        run(["unzip", "-q", "-o", str(readable), "-d", str(extract_dir)])
 
-    patched_brand_ftl = 0
-    patched_text = 0
-    patched_icons = 0
-
-    try:
-        with zipfile.ZipFile(omni_path, "r") as zin, zipfile.ZipFile(
-            tmp_path, "w", compression=zipfile.ZIP_STORED
-        ) as zout:
-            names = zin.namelist()
-            for info in zin.infolist():
-                name = info.filename
-                data = zin.read(name)
-
-                # brand.ftl / brand.properties
-                base = Path(name).name
-                if base == "brand.ftl":
-                    data = brand_ftl.encode("utf-8")
-                    patched_brand_ftl += 1
-                elif base == "brand.properties":
-                    data = brand_props.encode("utf-8")
-                    patched_brand_ftl += 1
-                elif name in icon_map and icon_map[name].is_file():
-                    data = icon_map[name].read_bytes()
-                    patched_icons += 1
-                elif should_patch_text_member(name):
-                    try:
-                        text = data.decode("utf-8")
-                    except UnicodeDecodeError:
-                        text = None
-                    if text is not None and ("Firefox" in text or "firefox" in text):
-                        # Only touch locale/UI-ish files that mention Firefox as product
-                        if (
-                            "/locale/" in name
-                            or "/localization/" in name
-                            or "branding" in name
-                            or "about" in name.lower()
-                            or name.endswith(".ftl")
-                            or name.endswith(".properties")
-                        ):
-                            new_text = patch_text_firefox(text, display_name)
-                            if new_text != text:
-                                data = new_text.encode("utf-8")
-                                patched_text += 1
-
-                # Preserve ZipInfo filename; force stored
-                new_info = zipfile.ZipInfo(filename=name)
-                new_info.compress_type = zipfile.ZIP_STORED
-                new_info.external_attr = info.external_attr
-                zout.writestr(new_info, data)
-
-            # If branding png paths exist as empty missing, inject when we have icons
-            existing = set(names)
-            for dest, src in icon_map.items():
-                if dest not in existing and src.is_file():
-                    info = zipfile.ZipInfo(filename=dest)
-                    info.compress_type = zipfile.ZIP_STORED
-                    zout.writestr(info, src.read_bytes())
-                    patched_icons += 1
-
-        shutil.move(str(tmp_path), str(omni_path))
-        print(
-            f"[patch] {omni_path.name}: brand_files={patched_brand_ftl} "
-            f"text={patched_text} icons={patched_icons}"
+        n_brand, n_text, n_icons = patch_extracted_tree(
+            extract_dir, display_name, vendor, icons_dir
         )
-    finally:
-        if tmp_path.exists():
-            tmp_path.unlink(missing_ok=True)
 
+        out_ja = Path(tmp) / "omni.new.ja"
+        # Mozilla requires store-only (no compression)
+        # zip from inside extract_dir so paths have no prefix
+        subprocess.run(
+            ["zip", "-0", "-X", "-r", str(out_ja), "."],
+            cwd=extract_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        shutil.move(str(out_ja), str(omni_path))
 
-def build_icon_map(icons_dir: Path, member_names: set[str]) -> dict[str, Path]:
-    mapping: dict[str, Path] = {}
-    local = {
-        "about-logo.png": icons_dir / "about-logo.png",
-        "about-logo@2x.png": icons_dir / "about-logo@2x.png",
-        "default128.png": icons_dir / "default128.png",
-        "default64.png": icons_dir / "default64.png",
-        "default32.png": icons_dir / "default32.png",
-    }
-    # Prefer about-logo, else default128
-    about = local["about-logo.png"] if local["about-logo.png"].is_file() else local["default128.png"]
-    about2 = (
-        local["about-logo@2x.png"]
-        if local["about-logo@2x.png"].is_file()
-        else about
+    if readable != omni_path and readable.exists():
+        readable.unlink(missing_ok=True)
+
+    print(
+        f"[patch] {omni_path.name}: brand_files={n_brand} "
+        f"text={n_text} icons={n_icons}"
     )
-    icon128 = local["default128.png"] if local["default128.png"].is_file() else about
-    icon64 = local["default64.png"] if local["default64.png"].is_file() else icon128
-    icon32 = local["default32.png"] if local["default32.png"].is_file() else icon64
-
-    for path in BRANDING_PNG_CANDIDATES:
-        if path not in member_names and "about-logo@2x" not in path and "about-logo" not in path:
-            # still map if we want inject — handled in repack
-            pass
-        if "about-logo@2x" in path:
-            mapping[path] = about2
-        elif "about-logo" in path:
-            mapping[path] = about
-        elif "icon128" in path:
-            mapping[path] = icon128
-        elif "icon64" in path:
-            mapping[path] = icon64
-        elif "icon32" in path:
-            mapping[path] = icon32
-    return {k: v for k, v in mapping.items() if v.is_file()}
 
 
-def patch_appdir(appdir: Path, display_name: str, vendor: str, brand_id: str, icons_dir: Path) -> None:
-    # Loose chrome icons
+def patch_appdir(
+    appdir: Path,
+    display_name: str,
+    vendor: str,
+    brand_id: str,
+    icons_dir: Path,
+) -> None:
+    ensure_tools()
+
+    # Loose chrome icons (window / taskbar)
     if icons_dir.is_dir():
         dest_dir = appdir / "browser" / "chrome" / "icons" / "default"
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -224,7 +275,6 @@ def patch_appdir(appdir: Path, display_name: str, vendor: str, brand_id: str, ic
             if src.is_file():
                 shutil.copy2(src, dest_dir / name)
 
-    # application.ini
     app_ini = appdir / "application.ini"
     if app_ini.is_file():
         text = app_ini.read_text(encoding="utf-8", errors="replace")
@@ -235,39 +285,11 @@ def patch_appdir(appdir: Path, display_name: str, vendor: str, brand_id: str, ic
             text = text.replace("[App]", f"[App]\nRemotingName={brand_id}", 1)
         app_ini.write_text(text, encoding="utf-8")
 
-    # Patch browser/omni.ja (and root omni.ja if present)
     for omni in (appdir / "browser" / "omni.ja", appdir / "omni.ja"):
-        if not omni.is_file():
-            continue
-        with zipfile.ZipFile(omni, "r") as zf:
-            members = set(zf.namelist())
-        icon_map = build_icon_map(icons_dir, members)
-        # Also map any existing branding png members to our icons
-        for m in list(members):
-            low = m.lower()
-            if not low.endswith(".png"):
-                continue
-            if "branding" not in low and "/icons/default/" not in low:
-                continue
-            if "128" in low or "about-logo@2x" in low:
-                src = icons_dir / "default128.png"
-            elif "64" in low:
-                src = icons_dir / "default64.png"
-                if not src.is_file():
-                    src = icons_dir / "default128.png"
-            elif "32" in low or "16" in low:
-                src = icons_dir / "default32.png"
-                if not src.is_file():
-                    src = icons_dir / "default128.png"
-            else:
-                src = icons_dir / "about-logo.png"
-                if not src.is_file():
-                    src = icons_dir / "default128.png"
-            if src.is_file():
-                icon_map[m] = src
-        repack_omni(omni, display_name, vendor, icon_map)
+        if omni.is_file():
+            print(f"[patch] Processing {omni}")
+            repack_omni(omni, display_name, vendor, icons_dir)
 
-    # distribution policies: skip first-run welcome that says Firefox
     dist = appdir / "distribution"
     dist.mkdir(parents=True, exist_ok=True)
     (dist / "policies.json").write_text(
@@ -285,16 +307,15 @@ def patch_appdir(appdir: Path, display_name: str, vendor: str, brand_id: str, ic
         encoding="utf-8",
     )
 
-    # Rename binaries: no firefox symlink (task manager was showing firefox)
     firefox_bin = appdir / "firefox"
     target = appdir / brand_id
-    if firefox_bin.is_file() or firefox_bin.is_symlink():
+    if firefox_bin.exists():
         if target.exists():
             target.unlink()
         firefox_bin.rename(target)
     firefox_bin_real = appdir / "firefox-bin"
     target_bin = appdir / f"{brand_id}-bin"
-    if firefox_bin_real.is_file() or firefox_bin_real.is_symlink():
+    if firefox_bin_real.exists():
         if target_bin.exists():
             target_bin.unlink()
         firefox_bin_real.rename(target_bin)
