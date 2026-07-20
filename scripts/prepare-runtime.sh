@@ -27,9 +27,11 @@ python3 "$ROOT/scripts/generate-branding.py" \
   --icons "$ROOT/icons" \
   --out "$ROOT/generated/branding"
 
-ID="$(python3 -c "import json;print(json.load(open('$ROOT/brand.config.json'))['id'])")"
-DISPLAY="$(python3 -c "import json;print(json.load(open('$ROOT/brand.config.json'))['displayName'])")"
-VENDOR="$(python3 -c "import json;print(json.load(open('$ROOT/brand.config.json'))['vendor'])")"
+BC="$ROOT/scripts/brand_config.py"
+ID="$(python3 "$BC" compile-id)"
+DISPLAY="$(python3 "$BC" compile-display)"
+VENDOR="$(python3 "$BC" vendor)"
+N_VARIANTS="$(python3 "$BC" variant-ids | wc -l)"
 
 SRC_BRAND="$ROOT/generated/branding/$ID"
 DEST_BRAND="$RUNTIME/browser/branding/$ID"
@@ -81,4 +83,5 @@ echo "  ./mach build"
 echo "  ./mach package"
 echo "  # then: $ROOT/scripts/make-appimage-from-dist.sh $RUNTIME/obj-${ID}/dist"
 echo ""
-echo "Brand: ${DISPLAY} (${ID}) vendor=${VENDOR}"
+echo "Compile brand: ${DISPLAY} (${ID}) vendor=${VENDOR}"
+echo "Package variants: ${N_VARIANTS} (see brand.config.json variants[])"

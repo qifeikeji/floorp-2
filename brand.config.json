@@ -1,8 +1,22 @@
 {
-  "id": "xingchen",
-  "displayName": "星辰浏览器",
+  "compileId": "xingchen",
+  "compileDisplayName": "星辰浏览器",
   "vendor": "Xingchen",
   "profileDir": "Xingchen",
   "runtimeRepository": "Floorp-Projects/Floorp-Runtime",
-  "runtimeRef": ""
+  "runtimeRef": "",
+  "variants": [
+    { "id": "aries", "displayName": "白羊座浏览器", "profileDir": "Aries" },
+    { "id": "taurus", "displayName": "金牛座浏览器", "profileDir": "Taurus" },
+    { "id": "gemini", "displayName": "双子座浏览器", "profileDir": "Gemini" },
+    { "id": "cancer", "displayName": "巨蟹座浏览器", "profileDir": "Cancer" },
+    { "id": "leo", "displayName": "狮子座浏览器", "profileDir": "Leo" },
+    { "id": "virgo", "displayName": "处女座浏览器", "profileDir": "Virgo" },
+    { "id": "libra", "displayName": "天秤座浏览器", "profileDir": "Libra" },
+    { "id": "scorpio", "displayName": "天蝎座浏览器", "profileDir": "Scorpio" },
+    { "id": "sagittarius", "displayName": "射手座浏览器", "profileDir": "Sagittarius" },
+    { "id": "capricorn", "displayName": "摩羯座浏览器", "profileDir": "Capricorn" },
+    { "id": "aquarius", "displayName": "水瓶座浏览器", "profileDir": "Aquarius" },
+    { "id": "pisces", "displayName": "双鱼座浏览器", "profileDir": "Pisces" }
+  ]
 }

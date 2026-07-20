@@ -9,21 +9,21 @@ and process/desktop identity — unlike patching an official Firefox tarball.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import shutil
 from pathlib import Path
 
 
 def load_config(path: Path) -> dict:
-    cfg = json.loads(path.read_text(encoding="utf-8"))
-    for key in ("id", "displayName", "vendor"):
-        if not cfg.get(key):
-            raise SystemExit(f"brand.config.json missing {key}")
-    bid = cfg["id"]
-    if not bid.replace("_", "").replace("-", "").isalnum() or not bid[0].islower():
-        raise SystemExit(f"id must be lowercase ascii identifier: {bid}")
-    cfg.setdefault("profileDir", cfg["displayName"])
-    return cfg
+    """Load via brand_config.py (compileId + variants) with legacy fallback."""
+    helper = Path(__file__).resolve().parent / "brand_config.py"
+    spec = importlib.util.spec_from_file_location("brand_config", helper)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"Cannot load {helper}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.load(path)
 
 
 def minimal_png(size: int = 1) -> bytes:

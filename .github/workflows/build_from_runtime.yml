@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 # Floorp-style: clone Floorp-Runtime (Gecko), inject MOZ_APP_NAME branding,
-# FULL compile (not official Firefox tarball), then AppImage.
+# FULL compile ONCE, then package N constellation AppImages from brand.config.json.
 #
 # Expect 3–6+ hours on GitHub-hosted runners. Needs large free disk.
 
@@ -26,13 +26,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    # Full Gecko builds often exceed 6h on 2-core + swap; keep headroom under GHA max.
     timeout-minutes: 420
     steps:
       - name: Free disk space + add swap
         run: |
           set -euo pipefail
-          # Standard runner ~14GB RAM is tight for clang/rust parallel link → OOM → exit 143 (SIGTERM).
           sudo swapoff -a || true
           sudo rm -f /swapfile
           sudo fallocate -l 16G /swapfile
@@ -56,13 +54,14 @@ jobs:
         working-directory: floorp-2
         run: |
           set -euo pipefail
+          BC=scripts/brand_config.py
           REPO="${{ inputs.runtime_repository }}"
           REF="${{ inputs.runtime_ref }}"
           if [[ -z "$REPO" ]]; then
-            REPO="$(python3 -c "import json;print(json.load(open('brand.config.json')).get('runtimeRepository') or 'Floorp-Projects/Floorp-Runtime')")"
+            REPO="$(python3 "$BC" runtime-repository)"
           fi
           if [[ -z "$REF" ]]; then
-            REF="$(python3 -c "import json;print(json.load(open('brand.config.json')).get('runtimeRef') or '')")"
+            REF="$(python3 "$BC" runtime-ref)"
           fi
           echo "repository=$REPO" >> "$GITHUB_OUTPUT"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
@@ -103,14 +102,15 @@ jobs:
         with:
           node-version: 20
 
-      - name: Prepare branding (MOZ_APP_NAME)
+      - name: Prepare branding (single MOZ_APP_NAME compile)
         run: |
           set -euo pipefail
           chmod +x floorp-2/scripts/*.sh floorp-2/scripts/*.py
           ./floorp-2/scripts/prepare-runtime.sh "$GITHUB_WORKSPACE/runtime"
-          ID="$(python3 -c "import json;print(json.load(open('floorp-2/brand.config.json'))['id'])")"
+          ID="$(python3 floorp-2/scripts/brand_config.py compile-id)"
           echo "BRAND_ID=$ID" >> "$GITHUB_ENV"
           echo "MOZCONFIG=$GITHUB_WORKSPACE/runtime/mozconfig.${ID}" >> "$GITHUB_ENV"
+          echo "Variants:"; python3 floorp-2/scripts/brand_config.py variant-ids
 
       - name: Mach bootstrap
         working-directory: runtime
@@ -132,7 +132,6 @@ jobs:
         run: |
           set -euo pipefail
           export MOZCONFIG
-          # Cap parallelism: -j$(nproc) on github-hosted runners frequently OOMs (exit 143).
           JOBS=2
           if [[ "$(nproc)" -ge 4 ]]; then JOBS=3; fi
           echo "Building with -j${JOBS} (nproc=$(nproc)); free:"; free -h
@@ -145,7 +144,7 @@ jobs:
           export MOZCONFIG
           ./mach package
 
-      - name: Build AppImage
+      - name: Build N AppImages (zodiac variants)
         run: |
           set -euo pipefail
           DIST="$GITHUB_WORKSPACE/runtime/obj-${BRAND_ID}/dist"
@@ -154,14 +153,116 @@ jobs:
           fi
           echo "Using DIST=$DIST"
           ls -la "$DIST" || true
-          ./floorp-2/scripts/make-appimage-from-dist.sh "$DIST" "$HOME/dist"
-          ls -lah "$HOME/dist"
+          OUT="$GITHUB_WORKSPACE/floorp-2/dist"
+          ./floorp-2/scripts/make-appimage-from-dist.sh "$DIST" "$OUT"
+          find "$OUT" -type f | sort
+          df -h
 
-      - name: Upload AppImage
+      # --- one artifact per constellation (visible under the Action run) ---
+      - name: Upload aries
         uses: actions/upload-artifact@v4
         with:
-          name: linux-x86_64-AppImage-runtime
-          path: ~/dist/*.AppImage
+          name: aries
+          path: floorp-2/dist/aries/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload taurus
+        uses: actions/upload-artifact@v4
+        with:
+          name: taurus
+          path: floorp-2/dist/taurus/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload gemini
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini
+          path: floorp-2/dist/gemini/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload cancer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cancer
+          path: floorp-2/dist/cancer/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload leo
+        uses: actions/upload-artifact@v4
+        with:
+          name: leo
+          path: floorp-2/dist/leo/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload virgo
+        uses: actions/upload-artifact@v4
+        with:
+          name: virgo
+          path: floorp-2/dist/virgo/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload libra
+        uses: actions/upload-artifact@v4
+        with:
+          name: libra
+          path: floorp-2/dist/libra/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload scorpio
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorpio
+          path: floorp-2/dist/scorpio/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload sagittarius
+        uses: actions/upload-artifact@v4
+        with:
+          name: sagittarius
+          path: floorp-2/dist/sagittarius/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload capricorn
+        uses: actions/upload-artifact@v4
+        with:
+          name: capricorn
+          path: floorp-2/dist/capricorn/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload aquarius
+        uses: actions/upload-artifact@v4
+        with:
+          name: aquarius
+          path: floorp-2/dist/aquarius/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload pisces
+        uses: actions/upload-artifact@v4
+        with:
+          name: pisces
+          path: floorp-2/dist/pisces/*
           if-no-files-found: error
           retention-days: 30
           compression-level: 0

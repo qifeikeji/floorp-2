@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 #
-# Download official Firefox → deep-brand (omni.ja) → Type-2 AppImage
+# Quick path: download official Firefox ONCE → brand N constellation AppImages.
 # Usage: ./scripts/make-appimage.sh [output-dir]
-
+#
+# Prefer Runtime full build (make-appimage-from-dist.sh) for real MOZ_APP_NAME.
+#
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,7 +16,10 @@ trap 'rm -rf "$WORKDIR"' EXIT
 CONFIG="$ROOT/brand.config.json"
 [[ -f "$CONFIG" ]] || { echo "Missing $CONFIG" >&2; exit 1; }
 
-read_json() {
+BC="$ROOT/scripts/brand_config.py"
+VENDOR="$(python3 "$BC" vendor)"
+
+read_optional() {
   python3 - "$CONFIG" "$1" <<'PY'
 import json, sys
 cfg = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -22,22 +27,10 @@ print(cfg.get(sys.argv[2], "") or "")
 PY
 }
 
-BRAND_ID="$(read_json id)"
-BRAND_DISPLAY_NAME="$(read_json displayName)"
-BRAND_VENDOR="$(read_json vendor)"
-FIREFOX_CHANNEL="$(read_json firefoxChannel)"
-FIREFOX_LANG="$(read_json firefoxLang)"
-
-BRAND_ID="${BRAND_ID:-mybrowser}"
-BRAND_DISPLAY_NAME="${BRAND_DISPLAY_NAME:-My Browser}"
-BRAND_VENDOR="${BRAND_VENDOR:-MyVendor}"
+FIREFOX_CHANNEL="$(read_optional firefoxChannel)"
+FIREFOX_LANG="$(read_optional firefoxLang)"
 FIREFOX_CHANNEL="${FIREFOX_CHANNEL:-latest}"
 FIREFOX_LANG="${FIREFOX_LANG:-zh-CN}"
-
-if [[ ! "$BRAND_ID" =~ ^[a-z][a-z0-9_-]*$ ]]; then
-  echo "brand.id must be lowercase [a-z][a-z0-9_-]*: $BRAND_ID" >&2
-  exit 1
-fi
 
 ARCH="$(uname -m)"
 case "$ARCH" in
@@ -57,130 +50,25 @@ mkdir -p "$OUTPUT_DIR"
 cd "$WORKDIR"
 
 DOWNLOAD_URL="https://download.mozilla.org/?product=${PRODUCT}&os=${MOZ_OS}&lang=${FIREFOX_LANG}"
-echo "[brand] ${BRAND_DISPLAY_NAME} (${BRAND_ID})"
-echo "[firefox] Downloading ${DOWNLOAD_URL}"
+echo "[firefox] Downloading ${DOWNLOAD_URL} (once → N variants)"
 curl -fL --retry 3 -o firefox.tar.xz "$DOWNLOAD_URL"
 
-echo "[firefox] Extracting"
-tar -xf firefox.tar.xz
+mkdir -p "$WORKDIR/dist-src"
+tar -xf firefox.tar.xz -C "$WORKDIR/dist-src"
 rm -f firefox.tar.xz
-[[ -d firefox ]] || { echo "Expected firefox/ in archive" >&2; exit 1; }
+[[ -d "$WORKDIR/dist-src/firefox" ]] || {
+  echo "Expected firefox/ in archive" >&2
+  ls -la "$WORKDIR/dist-src" >&2
+  exit 1
+}
 
-mv firefox AppDir
-
-echo "[brand] Patching omni.ja / icons / binary name (via unzip/zip)"
-# Ensure zip tools exist (CI installs them; local may need apt/pacman)
 command -v unzip >/dev/null && command -v zip >/dev/null || {
   echo "Need unzip+zip. e.g. sudo apt-get install -y unzip zip" >&2
   exit 1
 }
-python3 "$ROOT/scripts/patch_firefox_brand.py" AppDir \
-  --id "$BRAND_ID" \
-  --display-name "$BRAND_DISPLAY_NAME" \
-  --vendor "$BRAND_VENDOR" \
-  --icons "$ROOT/icons"
 
-cd AppDir
+echo "[brand] vendor=${VENDOR}; packing all variants from brand.config.json"
+PACK_FROM_ID=firefox PACK_FROM_DISPLAY="Firefox" \
+  "$ROOT/scripts/make-appimage-from-dist.sh" "$WORKDIR/dist-src" "$OUTPUT_DIR"
 
-VERSION="unknown"
-if [[ -f application.ini ]]; then
-  VERSION="$(awk -F= '/^Version=/{print $2; exit}' application.ini | tr -d '\r')"
-fi
-VERSION="${VERSION:-dev}"
-
-BINARY_NAME="$BRAND_ID"
-if [[ ! -x "./${BINARY_NAME}" ]]; then
-  echo "Branded binary missing: ${BINARY_NAME}" >&2
-  ls -la >&2
-  exit 1
-fi
-
-# AppImage icon
-ICON_SRC=""
-for candidate in \
-  "$ROOT/icons/default128.png" \
-  ./browser/chrome/icons/default/default128.png \
-  ./browser/chrome/icons/default/default64.png; do
-  if [[ -f "$candidate" ]]; then
-    ICON_SRC="$candidate"
-    break
-  fi
-done
-if [[ -n "$ICON_SRC" ]]; then
-  cp -f "$ICON_SRC" "./${BRAND_ID}.png"
-  cp -f "$ICON_SRC" ./.DirIcon
-else
-  printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > "./${BRAND_ID}.png"
-  cp -f "./${BRAND_ID}.png" ./.DirIcon
-fi
-
-# Desktop for AppImage tools + for optional install into ~/.local/share/applications
-cat > "./${BRAND_ID}.desktop" <<EOF
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=${BRAND_DISPLAY_NAME}
-GenericName=Web Browser
-Comment=${BRAND_DISPLAY_NAME}
-Exec=${BINARY_NAME} %u
-Icon=${BRAND_ID}
-Terminal=false
-StartupNotify=true
-Categories=Network;WebBrowser;
-MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/vnd.mozilla.xul+xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;
-# Must match --class / WM_CLASS (GNOME matches this to pick icon+title)
-StartupWMClass=${BRAND_ID}
-EOF
-cp -f "./${BRAND_ID}.desktop" ./firefox.desktop 2>/dev/null || true
-
-cat > ./AppRun <<EOF
-#!/bin/sh
-CURRENTDIR="\$(dirname "\$(readlink -f "\$0")")"
-export PATH="\${CURRENTDIR}:\${PATH}"
-export MOZ_LEGACY_PROFILES=1
-export MOZ_APP_LAUNCHER="\${APPIMAGE}"
-export MOZ_APP_REMOTINGNAME="${BRAND_ID}"
-
-# Default: stay on Wayland when the session is Wayland.
-# GNOME panel title/icon: run scripts/install-desktop.sh once so
-# ~/.local/share/applications/firefox.desktop overrides the system Firefox entry
-# (official builds still report Wayland app_id "firefox").
-#
-# Optional force X11: XINGCHEN_FORCE_X11=1
-if [ "\${XINGCHEN_FORCE_X11:-}" = "1" ]; then
-  export MOZ_ENABLE_WAYLAND=0
-  export GDK_BACKEND=x11
-fi
-
-exec "\${CURRENTDIR}/${BINARY_NAME}" \\
-  --name "${BRAND_ID}" \\
-  --class "${BRAND_ID}" \\
-  "\$@"
-EOF
-chmod +x ./AppRun
-
-cd "$WORKDIR"
-
-APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage"
-echo "[appimage] Downloading appimagetool"
-curl -fL --retry 3 -o appimagetool.AppImage "$APPIMAGETOOL_URL"
-chmod +x appimagetool.AppImage
-
-APPIMAGE_NAME="${BRAND_ID}-${VERSION}-${ARCH}.AppImage"
-echo "[appimage] Building ${APPIMAGE_NAME}"
-VERSION="$VERSION" ARCH="$ARCH" \
-  ./appimagetool.AppImage --appimage-extract-and-run ./AppDir "./${APPIMAGE_NAME}"
-
-mv "./${APPIMAGE_NAME}" "$OUTPUT_DIR/"
-[[ -f "./${APPIMAGE_NAME}.zsync" ]] && mv "./${APPIMAGE_NAME}.zsync" "$OUTPUT_DIR/" || true
-
-cat > "$OUTPUT_DIR/brand.env" <<EOF
-BRAND_ID=${BRAND_ID}
-BRAND_DISPLAY_NAME=${BRAND_DISPLAY_NAME}
-BRAND_VENDOR=${BRAND_VENDOR}
-FIREFOX_VERSION=${VERSION}
-EOF
-
-echo "[done] ${OUTPUT_DIR}/${APPIMAGE_NAME}"
-echo "[hint] 旧配置/欢迎页可能仍缓存「Firefox」文案：请删配置目录后重开，或用便携目录："
-echo "       mkdir -p ${APPIMAGE_NAME}.home && APPIMAGE_EXTRACT_AND_RUN=1 ./${APPIMAGE_NAME}"
+echo "[done] upstream multi-brand under ${OUTPUT_DIR}"

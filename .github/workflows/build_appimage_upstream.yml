@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 #
-# Quick path: download official Mozilla Firefox tarball and wrap as AppImage.
-# Wayland app_id stays "firefox" — GNOME panel will still say Mozilla Firefox
-# unless you run scripts/install-desktop.sh. Prefer build_from_runtime.yml
-# for real MOZ_APP_NAME / Floorp-style identity.
+# Quick path: download official Mozilla Firefox ONCE, brand N constellation AppImages.
+# Wayland app_id stays "firefox". Prefer build_from_runtime.yml for compileId app_id.
 
 name: Build AppImage (upstream Firefox, quick)
 
@@ -21,17 +19,116 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl wget python3 squashfs-tools desktop-file-utils unzip zip
 
-      - name: Build AppImage
+      - name: Build N AppImages
         run: |
-          chmod +x ./scripts/make-appimage.sh
-          ./scripts/make-appimage.sh "$HOME/dist"
-          ls -lah "$HOME/dist"
+          chmod +x ./scripts/*.sh ./scripts/*.py
+          ./scripts/make-appimage.sh "$GITHUB_WORKSPACE/dist"
+          find "$GITHUB_WORKSPACE/dist" -type f | sort
 
-      - name: Upload AppImage
+      - name: Upload aries
         uses: actions/upload-artifact@v4
         with:
-          name: linux-x86_64-AppImage-upstream
-          path: ~/dist/*.AppImage
+          name: aries
+          path: dist/aries/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload taurus
+        uses: actions/upload-artifact@v4
+        with:
+          name: taurus
+          path: dist/taurus/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload gemini
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini
+          path: dist/gemini/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload cancer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cancer
+          path: dist/cancer/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload leo
+        uses: actions/upload-artifact@v4
+        with:
+          name: leo
+          path: dist/leo/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload virgo
+        uses: actions/upload-artifact@v4
+        with:
+          name: virgo
+          path: dist/virgo/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload libra
+        uses: actions/upload-artifact@v4
+        with:
+          name: libra
+          path: dist/libra/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload scorpio
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorpio
+          path: dist/scorpio/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload sagittarius
+        uses: actions/upload-artifact@v4
+        with:
+          name: sagittarius
+          path: dist/sagittarius/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload capricorn
+        uses: actions/upload-artifact@v4
+        with:
+          name: capricorn
+          path: dist/capricorn/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload aquarius
+        uses: actions/upload-artifact@v4
+        with:
+          name: aquarius
+          path: dist/aquarius/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload pisces
+        uses: actions/upload-artifact@v4
+        with:
+          name: pisces
+          path: dist/pisces/*
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

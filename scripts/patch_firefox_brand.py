@@ -9,6 +9,7 @@ Mozilla omni.ja is a quirky ZIP that Python zipfile often cannot open
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -40,7 +41,12 @@ vendorShortName={vendor}
 """
 
 
-def patch_text_firefox(content: str, display_name: str) -> str:
+def patch_text_firefox(
+    content: str,
+    display_name: str,
+    *,
+    also_replace: list[str] | None = None,
+) -> str:
     replacements = [
         ("Mozilla Firefox Official Build", f"{display_name} Build"),
         ("欢迎使用 Firefox", f"欢迎使用 {display_name}"),
@@ -52,6 +58,15 @@ def patch_text_firefox(content: str, display_name: str) -> str:
         ("Mozilla Firefox", display_name),
         ("Firefox", display_name),
     ]
+    # Longer compile-time names first (avoid partial clobber)
+    extras = sorted(
+        {s for s in (also_replace or []) if s and s != display_name},
+        key=len,
+        reverse=True,
+    )
+    for old in extras:
+        replacements.insert(0, (old, display_name))
+
     out = content
     for old, new in replacements:
         out = out.replace(old, new)
@@ -150,6 +165,8 @@ def patch_extracted_tree(
     display_name: str,
     vendor: str,
     icons_dir: Path,
+    *,
+    also_replace: list[str] | None = None,
 ) -> tuple[int, int, int]:
     brand_ftl = write_brand_ftl(display_name, vendor)
     brand_props = write_brand_properties(display_name, vendor)
@@ -203,9 +220,12 @@ def patch_extracted_tree(
                 text = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 continue
-            if "Firefox" not in text and "firefox" not in text:
+            needles = ["Firefox", "firefox", *(also_replace or [])]
+            if not any(n in text for n in needles if n):
                 continue
-            new_text = patch_text_firefox(text, display_name)
+            new_text = patch_text_firefox(
+                text, display_name, also_replace=also_replace
+            )
             if new_text != text:
                 path.write_text(new_text, encoding="utf-8")
                 n_text += 1
@@ -218,6 +238,8 @@ def repack_omni(
     display_name: str,
     vendor: str,
     icons_dir: Path,
+    *,
+    also_replace: list[str] | None = None,
 ) -> None:
     ensure_tools()
     readable = fix_omni_zip(omni_path)
@@ -229,7 +251,11 @@ def repack_omni(
         run(["unzip", "-q", "-o", str(readable), "-d", str(extract_dir)])
 
         n_brand, n_text, n_icons = patch_extracted_tree(
-            extract_dir, display_name, vendor, icons_dir
+            extract_dir,
+            display_name,
+            vendor,
+            icons_dir,
+            also_replace=also_replace,
         )
 
         out_ja = Path(tmp) / "omni.new.ja"
@@ -253,16 +279,43 @@ def repack_omni(
     )
 
 
+def _rename_binary(appdir: Path, from_names: list[str], brand_id: str) -> None:
+    """Rename launcher binary (and optional -bin) to brand_id."""
+    target = appdir / brand_id
+    target_bin = appdir / f"{brand_id}-bin"
+
+    for name in from_names:
+        src = appdir / name
+        if src.is_file() or src.is_symlink():
+            if target.exists() and target.resolve() != src.resolve():
+                target.unlink()
+            src.rename(target)
+            break
+
+    for name in from_names:
+        src_bin = appdir / f"{name}-bin"
+        if src_bin.is_file() or src_bin.is_symlink():
+            if target_bin.exists() and target_bin.resolve() != src_bin.resolve():
+                target_bin.unlink()
+            src_bin.rename(target_bin)
+            break
+
+
 def patch_appdir(
     appdir: Path,
     display_name: str,
     vendor: str,
     brand_id: str,
     icons_dir: Path,
+    *,
+    from_id: str | None = None,
+    from_display: str | None = None,
+    profile_dir: str | None = None,
 ) -> None:
     ensure_tools()
+    also_replace = [s for s in (from_display, "星辰浏览器", "Floorp") if s]
 
-    # Loose chrome icons (window / taskbar)
+    # Loose chrome icons (window / taskbar) — shared icons for all variants
     if icons_dir.is_dir():
         dest_dir = appdir / "browser" / "chrome" / "icons" / "default"
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -288,14 +341,17 @@ def patch_appdir(
     for omni in (appdir / "browser" / "omni.ja", appdir / "omni.ja"):
         if omni.is_file():
             print(f"[patch] Processing {omni}")
-            repack_omni(omni, display_name, vendor, icons_dir)
+            repack_omni(
+                omni,
+                display_name,
+                vendor,
+                icons_dir,
+                also_replace=also_replace,
+            )
 
     # Prefer autoconfig prefs over policies.json.
-    # policies.json triggers the "managed by your organization" banner — not a
-    # remote org, just Firefox enterprise-policy UI. Floorp often shows the same.
     pref_dir = appdir / "defaults" / "pref"
     pref_dir.mkdir(parents=True, exist_ok=True)
-    # Load unlocked autoconfig (obscure_value 0 = plain text cfg next to binary)
     (pref_dir / "autoconfig.js").write_text(
         f"""// Autoconfig bootstrap for {display_name}
 pref("general.config.filename", "{brand_id}.cfg");
@@ -304,7 +360,7 @@ pref("general.config.sandbox_enabled", false);
 """,
         encoding="utf-8",
     )
-    # CFG must start with a comment line (Mozilla requirement)
+    profile = profile_dir or display_name
     (appdir / f"{brand_id}.cfg").write_text(
         f"""// {display_name} local prefs (not enterprise policy)
 lockPref("app.update.enabled", false);
@@ -312,27 +368,43 @@ lockPref("app.update.auto", false);
 lockPref("app.update.background.enabled", false);
 lockPref("browser.shell.checkDefaultBrowser", false);
 defaultPref("browser.startup.homepage_override.mstone", "ignore");
+// Hint for portable / multi-brand installs (profile under ~/.{profile})
+defaultPref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
 """,
         encoding="utf-8",
     )
+    # Keep profile name in a small marker file for wrappers / docs
+    (appdir / "BRAND_VARIANT.json").write_text(
+        json.dumps(
+            {
+                "id": brand_id,
+                "displayName": display_name,
+                "vendor": vendor,
+                "profileDir": profile,
+                "fromId": from_id,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
-    # Remove policies.json if a previous build left one (avoids org banner)
     policies = appdir / "distribution" / "policies.json"
     if policies.is_file():
         policies.unlink()
 
-    firefox_bin = appdir / "firefox"
-    target = appdir / brand_id
-    if firefox_bin.exists():
-        if target.exists():
-            target.unlink()
-        firefox_bin.rename(target)
-    firefox_bin_real = appdir / "firefox-bin"
-    target_bin = appdir / f"{brand_id}-bin"
-    if firefox_bin_real.exists():
-        if target_bin.exists():
-            target_bin.unlink()
-        firefox_bin_real.rename(target_bin)
+    rename_from = []
+    for n in (from_id, "firefox", "floorp", "xingchen"):
+        if n and n not in rename_from:
+            rename_from.append(n)
+    _rename_binary(appdir, rename_from, brand_id)
+
+    # Drop leftover compile-id cfg if different
+    if from_id and from_id != brand_id:
+        old_cfg = appdir / f"{from_id}.cfg"
+        if old_cfg.is_file():
+            old_cfg.unlink()
 
     print(f"[patch] AppDir branded as {display_name!r} id={brand_id}")
 
@@ -344,8 +416,20 @@ def main() -> None:
     p.add_argument("--display-name", required=True)
     p.add_argument("--vendor", required=True)
     p.add_argument("--icons", type=Path, required=True)
+    p.add_argument("--from-id", default="")
+    p.add_argument("--from-display", default="")
+    p.add_argument("--profile-dir", default="")
     args = p.parse_args()
-    patch_appdir(args.appdir, args.display_name, args.vendor, args.id, args.icons)
+    patch_appdir(
+        args.appdir,
+        args.display_name,
+        args.vendor,
+        args.id,
+        args.icons,
+        from_id=args.from_id or None,
+        from_display=args.from_display or None,
+        profile_dir=args.profile_dir or None,
+    )
 
 
 if __name__ == "__main__":

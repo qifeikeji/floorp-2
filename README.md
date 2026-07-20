@@ -1,91 +1,85 @@
-# 星辰浏览器 — Floorp 式 Runtime 编译 + AppImage
+# 星辰 / 十二星座浏览器 — 一次编译，N 个打包
 
-在 **Gecko / Floorp-Runtime 源码**上设置 `MOZ_APP_NAME`（与 Floorp 相同做法），完整编译后再打 AppImage。  
-这样 Wayland 的 `app_id` 就是 `xingchen`，GNOME 面板会显示「星辰浏览器」，而不是 Mozilla Firefox。
+在 **Floorp-Runtime** 上用统一的 `compileId`（`MOZ_APP_NAME`）**完整编译一次**，再按 `brand.config.json` 里的 `variants[]` 打出多个 AppImage。  
+耗时几乎只在那一次 `mach build`；打包阶段只是复制 + 换皮 + AppImage。
 
-> 官方 Firefox 压缩包**改不了** `MOZ_APP_NAME`（已编进二进制）。那条「快速换皮」路线见下方「上游包（不推荐作正式品牌）」。
+## 你改哪里
 
-## 你只改这两处
-
-### 1. `brand.config.json`
+### `brand.config.json`
 
 ```json
 {
-  "id": "xingchen",
-  "displayName": "星辰浏览器",
+  "compileId": "xingchen",
+  "compileDisplayName": "星辰浏览器",
   "vendor": "Xingchen",
-  "profileDir": "Xingchen",
-  "runtimeRepository": "Floorp-Projects/Floorp-Runtime",
-  "runtimeRef": ""
+  "variants": [
+    { "id": "aries", "displayName": "白羊座浏览器", "profileDir": "Aries" },
+    …
+  ]
 }
 ```
 
 | 字段 | 作用 |
 |------|------|
-| `id` | **`MOZ_APP_NAME`**、二进制名、Wayland `app_id`、`.desktop` |
-| `displayName` | 界面显示名 / `brand.ftl` |
-| `vendor` | Vendor |
-| `profileDir` | 配置目录名 |
-| `runtimeRepository` | 用来完整编译的 Gecko 树（默认 Floorp-Runtime） |
+| `compileId` | **编译一次**的 `MOZ_APP_NAME` / 二进制原名 / Wayland `app_id` |
+| `compileDisplayName` | 编译期品牌文案（打包时会被各星座名覆盖） |
+| `variants[].id` | 产物二进制名、桌面项、Actions artifact 名 |
+| `variants[].displayName` | 界面显示名（关于页等） |
+| `icons/` | **所有变体共用**同一套图标 |
 
-### 2. `icons/`
+当前默认是 **12 星座**（aries … pisces）。增删变体只改 `variants` 数组即可（workflow 里若写死了 12 个 upload，改数量时同步改 CI）。
 
-至少放 `default128.png`（建议再补 16/32/48/64 与 `about-logo.png`）。
+## 流程
 
-## 和 Floorp 的对应关系
+```text
+mach build（一次，compileId=xingchen）
+        ↓
+mach package → xingchen.tar.xz
+        ↓
+make-appimage-from-dist.sh
+  ├─ aries AppImage
+  ├─ taurus AppImage
+  └─ … 共 N 个
+        ↓
+Actions Artifacts：aries / taurus / … / pisces
+```
 
-| Floorp | 本仓库 |
-|--------|--------|
-| Floorp-Runtime 编译，`MOZ_APP_NAME=floorp` | 注入 `browser/branding/<id>/` + `--with-app-name=<id>` 后完整编译 |
-| 面板显示 Floorp | 面板显示 `displayName`（app_id=`id`） |
-| 官方 Firefox 换皮 | **做不到**原生 app_id（仅有 upstream 快路径） |
-
-## CI（推荐）
+## CI
 
 GitHub Actions → **Build from Runtime (MOZ_APP_NAME)**
 
-- 会 clone Floorp-Runtime、注入品牌、**完整 `mach build`**（约数小时）、再打 AppImage  
-- Artifact：`linux-x86_64-AppImage-runtime`
+- 全量编译约数小时  
+- 成功后在本次 run 的 Artifacts 下看到 **12 个命名包**（`aries` … `pisces`）
 
-标准 `ubuntu-22.04` 磁盘/内存紧张：workflow 已加 16G swap 并把 `mach build` 并行度压到 2–3。  
-若仍出现 **exit 143**（被 SIGTERM 杀掉），多半是 OOM/磁盘/超时或重复触发把旧任务 cancel 掉——换更大 runner 或本地编 Runtime。  
-`swgl … -fembed-bitcode=all` 一类是常见警告，可忽略。
-
-## 本地（有磁盘与时间时）
+## 本地
 
 ```bash
-# 1) 准备 Runtime 源码树（示例）
-git clone --depth 1 https://github.com/Floorp-Projects/Floorp-Runtime.git ../Floorp-Runtime
-
-# 2) 注入品牌 + 写 mozconfig
-chmod +x scripts/*.sh scripts/*.py
 ./scripts/prepare-runtime.sh ../Floorp-Runtime
-
-# 3) 完整编译（很久）
 cd ../Floorp-Runtime
 export MOZCONFIG=$PWD/mozconfig.xingchen
 ./mach --no-interactive bootstrap --application-choice browser
 ./mach configure && ./mach build && ./mach package
 
-# 4) AppImage
-cd ../floorp-2   # 回本仓库
+cd ../floorp-2
 ./scripts/make-appimage-from-dist.sh ../Floorp-Runtime/obj-xingchen/dist ./dist
+# → dist/aries/*.AppImage … dist/pisces/*.AppImage
 ```
 
-## 上游包快路径（仅测试用）
+## Wayland 说明
 
-Action：**Build AppImage (upstream Firefox, quick)**  
-脚本：`scripts/make-appimage.sh`  
+所有变体的 **Wayland `app_id` 仍是 `compileId`（xingchen）**——这是编译进二进制的，换皮改不了。  
+各变体仍有独立：二进制名、`.desktop`、`RemotingName`、`--class`、界面显示名。  
+面板若都显示同一名字，属预期；要 12 个原生不同 `app_id` 只能编 12 次（本仓库刻意不做）。
 
-下载 Mozilla 官方包换皮，**Wayland 仍是 `firefox`**，面板会显示 Mozilla Firefox。  
-若要用覆盖桌面项凑合：`scripts/install-desktop.sh`。
+## 上游快路径
 
-## 脚本一览
+`build_appimage_upstream.yml` / `make-appimage.sh`：下官方 Firefox 换皮，**不经 Runtime 全编**。星座多包逻辑主要挂在 Runtime 这条路上。
+
+## 脚本
 
 | 脚本 | 作用 |
 |------|------|
-| `generate-branding.py` | 生成 `browser/branding/<id>/` |
-| `prepare-runtime.sh` | 写入 Runtime 树 + `mozconfig`（含 `--with-app-name`） |
-| `make-appimage-from-dist.sh` | 从 `mach package` 产物打 AppImage |
-| `make-appimage.sh` | 上游官方包快路径 |
-| `install-desktop.sh` | 仅 upstream 路线的 GNOME 桌面覆盖 |
+| `brand_config.py` | 读配置（compileId / variants） |
+| `generate-branding.py` / `prepare-runtime.sh` | 注入编译期 branding |
+| `make-appimage-from-dist.sh` | **一次 dist → N 个 AppImage** |
+| `patch_firefox_brand.py` | 每个变体换皮（omni.ja / 二进制名） |
